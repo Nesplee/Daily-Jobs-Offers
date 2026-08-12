@@ -5,11 +5,31 @@ services:
       POSTGRES_USER: ${POSTGRES_ADMIN_USER}
       POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
+    # 127.0.0.1 only: n8n and Metabase reach this service over the internal
+    # Docker network (hostname "db", port 5432) since they run on the same
+    # VPS — the host port is published solely for SSH-tunneled debugging
+    # (psql/DBeaver from your laptop), never for direct internet exposure.
     ports:
-      - "${POSTGRES_PORT}:5432"
+      - "127.0.0.1:${POSTGRES_PORT}:5432"
     volumes:
       - annonces_pg_data:/var/lib/postgresql/data
       - ./migrations:/migrations:ro
 
+  n8n:
+    build:
+      context: ./docker/n8n
+    # Same reasoning as "db" above: not exposed to the public internet by
+    # this compose file. On the VPS, put a reverse proxy (e.g. Traefik, as
+    # in the Inception project this Dockerfile came from) in front of it,
+    # or reach it via an SSH tunnel until that's set up.
+    ports:
+      - "127.0.0.1:5678:5678"
+    volumes:
+      - n8n_data:/home/node/.n8n
+    depends_on:
+      - db
+    restart: unless-stopped
+
 volumes:
   annonces_pg_data:
+  n8n_data:
