@@ -15,3 +15,20 @@ assert_table_exists() {
 }
 
 assert_table_exists public search_profiles
+
+assert_table_exists public job_listings
+
+assert_column_exists() {
+  local table=$1 column=$2
+  local exists
+  exists=$($PSQL "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='${table}' AND column_name='${column}');")
+  if [ "$exists" != "t" ]; then
+    echo "FAIL: column ${table}.${column} does not exist"
+    exit 1
+  fi
+  echo "PASS: column ${table}.${column} exists"
+}
+
+for col in is_read is_favorite raw_extra keywords_matched search_profile_id; do
+  assert_column_exists job_listings "$col"
+done
