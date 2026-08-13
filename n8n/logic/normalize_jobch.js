@@ -1,6 +1,6 @@
 function normalizeJobchListing(raw) {
   return {
-    source: 'job.ch',
+    source: 'jobs.ch',
     source_id: raw.id,
     title: raw.title,
     company: raw.company,

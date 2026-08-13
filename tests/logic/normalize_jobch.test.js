@@ -17,7 +17,7 @@ test('maps the common fields and buckets the rest into raw_extra', () => {
   };
   const result = normalizeJobchListing(raw);
   assert.deepEqual(result, {
-    source: 'job.ch',
+    source: 'jobs.ch',
     source_id: 'jch-12345',
     title: 'Data Engineer 80-100%',
     company: 'Exemple SA',
