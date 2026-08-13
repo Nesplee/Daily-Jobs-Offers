@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { matchesProfile, matchedKeywords, isAllowedLanguage } = require('../../n8n/logic/matching.js');
+const { matchesProfile, matchedKeywords, detectForeignLanguage } = require('../../n8n/logic/matching.js');
 
 test('matches when title contains a keyword and location contains a target location', () => {
   const listing = { title: 'Data Engineer (m/f/d)', location: 'Lausanne, VD', rawExtra: {} };
@@ -32,48 +32,51 @@ test('matchedKeywords returns only the keywords actually found', () => {
   assert.deepEqual(matchedKeywords(listing, profile), ['data engineer', 'python']);
 });
 
-test('isAllowedLanguage rejects a listing with multiple German markers', () => {
+test('detectForeignLanguage identifies German from multiple markers', () => {
   const listing = {
     title: 'Data Engineer gesucht',
     location: 'Zürich',
     rawExtra: { description_snippet: 'Wir suchen für unser Team eine motivierte Person mit Kenntnisse in Python und Erfahrung in der Softwareentwicklung.' },
   };
-  assert.equal(isAllowedLanguage(listing), false);
+  assert.equal(detectForeignLanguage(listing), 'de');
 });
 
-test('isAllowedLanguage rejects a listing with multiple Italian markers', () => {
+test('detectForeignLanguage identifies Italian from multiple markers', () => {
   const listing = {
     title: 'Data Engineer cercasi',
     location: 'Lugano',
     rawExtra: { description_snippet: 'La nostra azienda offre un ruolo con competenze richieste in Python, candidatura aperta a chi ha esperienza.' },
   };
-  assert.equal(isAllowedLanguage(listing), false);
+  assert.equal(detectForeignLanguage(listing), 'it');
 });
 
-test('isAllowedLanguage accepts a French listing', () => {
+test('detectForeignLanguage returns null for French/English text', () => {
   const listing = {
     title: 'Data Engineer',
     location: 'Genève',
     rawExtra: { description_snippet: 'Nous cherchons un data engineer maîtrisant Python et SQL pour rejoindre notre équipe.' },
   };
-  assert.equal(isAllowedLanguage(listing), true);
+  assert.equal(detectForeignLanguage(listing), null);
 });
 
-test('isAllowedLanguage accepts an English listing', () => {
-  const listing = {
-    title: 'Data Engineer',
-    location: 'Lausanne',
-    rawExtra: { description_snippet: 'We are looking for a data engineer with strong Python and SQL skills to join our team.' },
-  };
-  assert.equal(isAllowedLanguage(listing), true);
-});
-
-test('matchesProfile rejects a German listing even when keywords and location match', () => {
+test('matchesProfile matches a German listing when keywords and location fit (no longer rejected)', () => {
   const listing = {
     title: 'Data Engineer gesucht',
-    location: 'Genève',
-    rawExtra: { description_snippet: 'Wir suchen für unser Team eine Person mit Kenntnisse in Python und Erfahrung in der Entwicklung.' },
+    location: 'Genf GE',
+    rawExtra: { description_snippet: 'Wir suchen für unser Team eine Person mit Kenntnisse in Python.' },
   };
-  const profile = { keywords: ['data engineer', 'python'], locations: ['Genève'] };
-  assert.equal(matchesProfile(listing, profile), false);
+  const profile = { keywords: ['data engineer'], locations: ['Genève'] };
+  assert.equal(matchesProfile(listing, profile), true);
+});
+
+test('locationMatches accepts a German Swiss place name via canton-code fallback', () => {
+  const listing = { title: 'Data Engineer', location: 'Genf GE', rawExtra: {} };
+  const profile = { keywords: ['data engineer'], locations: ['Genève'] };
+  assert.equal(matchesProfile(listing, profile), true);
+});
+
+test('locationMatches still works via plain substring for non-aliased locations', () => {
+  const listing = { title: 'Data Engineer', location: 'Lausanne, VD', rawExtra: {} };
+  const profile = { keywords: ['data engineer'], locations: ['Lausanne'] };
+  assert.equal(matchesProfile(listing, profile), true);
 });

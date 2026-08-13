@@ -10,23 +10,36 @@ function matchedKeywords(listing, profile) {
   return profile.keywords.filter((kw) => text.includes(kw.toLowerCase()));
 }
 
+const CANTON_CODE_BY_LOCATION = {
+  'genève': 'ge',
+  'lausanne': 'vd',
+  'neuchâtel': 'ne',
+};
+
 function locationMatches(listing, profile) {
   const location = (listing.location || '').toLowerCase();
-  return profile.locations.some((loc) => location.includes(loc.toLowerCase()));
+  return profile.locations.some((loc) => {
+    const locLower = loc.toLowerCase();
+    if (location.includes(locLower)) return true;
+    const cantonCode = CANTON_CODE_BY_LOCATION[locLower];
+    return cantonCode ? new RegExp(`\\b${cantonCode}\\b`, 'i').test(location) : false;
+  });
 }
 
 const GERMAN_MARKERS = /\b(und|für|mit|Kenntnisse|Erfahrung|Bewerbung|Mitarbeiter|Aufgaben|Anforderungen|gesucht|Unternehmen|suchen)\b/gi;
 const ITALIAN_MARKERS = /\b(azienda|competenze|candidatura|cercasi|offriamo|esperienza|conoscenza|richiesta)\b/gi;
 
-function isAllowedLanguage(listing) {
+function detectForeignLanguage(listing) {
   const text = searchableText(listing);
   const germanHits = (text.match(GERMAN_MARKERS) || []).length;
   const italianHits = (text.match(ITALIAN_MARKERS) || []).length;
-  return germanHits < 2 && italianHits < 2;
+  if (germanHits >= 2) return 'de';
+  if (italianHits >= 2) return 'it';
+  return null;
 }
 
 function matchesProfile(listing, profile) {
-  return matchedKeywords(listing, profile).length > 0 && locationMatches(listing, profile) && isAllowedLanguage(listing);
+  return matchedKeywords(listing, profile).length > 0 && locationMatches(listing, profile);
 }
 
-module.exports = { matchesProfile, matchedKeywords, isAllowedLanguage };
+module.exports = { matchesProfile, matchedKeywords, detectForeignLanguage };
