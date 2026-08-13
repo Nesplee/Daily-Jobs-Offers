@@ -10,6 +10,7 @@ test('splits creator into company/location and maps common fields', () => {
     contentSnippet: 'We are looking for a DevOps engineer with AWS experience.',
     pubDate: 'Mon, 10 Aug 2026 08:00:00 GMT',
     creator: 'Exemple SA - Genève',
+    fullDescription: 'Full text of the Indeed ad, unabridged.',
   };
   const result = normalizeIndeedItem(raw);
   assert.deepEqual(result, {
@@ -22,6 +23,7 @@ test('splits creator into company/location and maps common fields', () => {
     posted_at: '2026-08-10',
     raw_extra: {
       description_snippet: 'We are looking for a DevOps engineer with AWS experience.',
+      description_full: 'Full text of the Indeed ad, unabridged.',
     },
   });
 });
@@ -29,9 +31,10 @@ test('splits creator into company/location and maps common fields', () => {
 test('falls back to null company/location when creator has no separator', () => {
   const raw = {
     guid: 'g1', title: 'T', link: 'https://x', contentSnippet: null,
-    pubDate: 'Mon, 10 Aug 2026 08:00:00 GMT', creator: 'JustACompanyName',
+    pubDate: 'Mon, 10 Aug 2026 08:00:00 GMT', creator: 'JustACompanyName', fullDescription: null,
   };
   const result = normalizeIndeedItem(raw);
   assert.equal(result.company, 'JustACompanyName');
   assert.equal(result.location, null);
+  assert.equal(result.raw_extra.description_full, null);
 });

@@ -11,6 +11,7 @@ function normalizeJobchListing(raw) {
       contract_type: raw.contractType || null,
       remote: raw.remote || null,
       description: raw.description || null,
+      description_full: raw.fullDescription || null,
     },
   };
 }

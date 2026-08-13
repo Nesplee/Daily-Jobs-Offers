@@ -16,6 +16,7 @@ test('maps the common fields and buckets description/salary/contract into raw_ex
     contract_type: 'permanent',
     contract_time: 'full_time',
     category: { label: 'IT Jobs' },
+    fullDescription: 'Full text of the Adzuna ad, unabridged.',
   };
   const result = normalizeAdzunaItem(raw);
   assert.deepEqual(result, {
@@ -33,6 +34,7 @@ test('maps the common fields and buckets description/salary/contract into raw_ex
       contract_type: 'permanent',
       contract_time: 'full_time',
       category: 'IT Jobs',
+      description_full: 'Full text of the Adzuna ad, unabridged.',
     },
   });
 });
@@ -42,7 +44,7 @@ test('handles missing optional fields as null', () => {
     id: '1', title: 'T', company: null, location: null,
     redirect_url: 'https://x', created: '2026-08-09T10:00:00Z',
     description: null, salary_min: null, salary_max: null,
-    contract_type: null, contract_time: null, category: null,
+    contract_type: null, contract_time: null, category: null, fullDescription: null,
   };
   const result = normalizeAdzunaItem(raw);
   assert.equal(result.company, null);
@@ -53,5 +55,6 @@ test('handles missing optional fields as null', () => {
     contract_type: null,
     contract_time: null,
     category: null,
+    description_full: null,
   });
 });

@@ -17,6 +17,7 @@ function normalizeIndeedItem(raw) {
     posted_at: new Date(raw.pubDate).toISOString().slice(0, 10),
     raw_extra: {
       description_snippet: raw.contentSnippet || null,
+      description_full: raw.fullDescription || null,
     },
   };
 }

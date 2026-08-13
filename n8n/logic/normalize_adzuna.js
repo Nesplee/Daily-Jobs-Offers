@@ -14,6 +14,7 @@ function normalizeAdzunaItem(raw) {
       contract_type: raw.contract_type || null,
       contract_time: raw.contract_time || null,
       category: raw.category ? raw.category.label : null,
+      description_full: raw.fullDescription || null,
     },
   };
 }

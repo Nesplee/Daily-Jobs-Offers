@@ -13,6 +13,7 @@ test('maps the common fields and buckets the rest into raw_extra', () => {
     contractType: 'CDI',
     remote: 'hybride',
     description: 'Nous cherchons un data engineer maîtrisant Python.',
+    fullDescription: 'Full text of the job.ch ad, unabridged.',
   };
   const result = normalizeJobchListing(raw);
   assert.deepEqual(result, {
@@ -27,6 +28,7 @@ test('maps the common fields and buckets the rest into raw_extra', () => {
       contract_type: 'CDI',
       remote: 'hybride',
       description: 'Nous cherchons un data engineer maîtrisant Python.',
+      description_full: 'Full text of the job.ch ad, unabridged.',
     },
   });
 });
@@ -34,8 +36,9 @@ test('maps the common fields and buckets the rest into raw_extra', () => {
 test('handles a missing postedDate as null', () => {
   const raw = {
     id: 'jch-999', title: 'X', company: null, url: 'https://job.ch/x',
-    location: null, postedDate: null, contractType: null, remote: null, description: null,
+    location: null, postedDate: null, contractType: null, remote: null, description: null, fullDescription: null,
   };
   const result = normalizeJobchListing(raw);
   assert.equal(result.posted_at, null);
+  assert.equal(result.raw_extra.description_full, null);
 });
