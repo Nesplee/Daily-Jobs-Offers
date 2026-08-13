@@ -18,14 +18,25 @@ services:
   n8n:
     build:
       context: ./docker/n8n
-    # Same reasoning as "db" above: not exposed to the public internet by
-    # this compose file. On the VPS, put a reverse proxy (e.g. Traefik, as
-    # in the Inception project this Dockerfile came from) in front of it,
-    # or reach it via an SSH tunnel until that's set up.
-    ports:
-      - "127.0.0.1:5678:5678"
+    # network_mode: host lets n8n's Postgres node reach db via
+    # 127.0.0.1:${POSTGRES_PORT} and, more importantly, lets the Send Email
+    # node reach Proton Mail Bridge's SMTP proxy, which only listens on the
+    # host's 127.0.0.1 — unreachable from an isolated Docker network.
+    # N8N_LISTEN_ADDRESS restores the localhost-only exposure that the
+    # removed "ports: 127.0.0.1:5678:5678" mapping used to provide, since
+    # host networking would otherwise bind n8n to all host interfaces.
+    network_mode: host
+    environment:
+      N8N_LISTEN_ADDRESS: 127.0.0.1
+      # Trusts Proton Mail Bridge's self-signed local SMTP certificate
+      # without disabling TLS verification globally (which would also
+      # weaken the DeepL HTTPS calls). Machine-specific: Bridge regenerates
+      # this cert per install, so it's git-ignored and must be re-extracted
+      # after every Bridge (re)install — see docker/n8n/certs/proton-bridge-ca.pem.
+      NODE_EXTRA_CA_CERTS: /home/node/certs/proton-bridge-ca.pem
     volumes:
       - n8n_data:/home/node/.n8n
+      - ./docker/n8n/certs:/home/node/certs:ro
     depends_on:
       - db
     restart: unless-stopped
