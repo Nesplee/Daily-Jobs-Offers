@@ -15,8 +15,18 @@ function locationMatches(listing, profile) {
   return profile.locations.some((loc) => location.includes(loc.toLowerCase()));
 }
 
-function matchesProfile(listing, profile) {
-  return matchedKeywords(listing, profile).length > 0 && locationMatches(listing, profile);
+const GERMAN_MARKERS = /\b(und|für|mit|Kenntnisse|Erfahrung|Bewerbung|Mitarbeiter|Aufgaben|Anforderungen|gesucht|Unternehmen|suchen)\b/gi;
+const ITALIAN_MARKERS = /\b(azienda|competenze|candidatura|cercasi|offriamo|esperienza|conoscenza|richiesta)\b/gi;
+
+function isAllowedLanguage(listing) {
+  const text = searchableText(listing);
+  const germanHits = (text.match(GERMAN_MARKERS) || []).length;
+  const italianHits = (text.match(ITALIAN_MARKERS) || []).length;
+  return germanHits < 2 && italianHits < 2;
 }
 
-module.exports = { matchesProfile, matchedKeywords };
+function matchesProfile(listing, profile) {
+  return matchedKeywords(listing, profile).length > 0 && locationMatches(listing, profile) && isAllowedLanguage(listing);
+}
+
+module.exports = { matchesProfile, matchedKeywords, isAllowedLanguage };
