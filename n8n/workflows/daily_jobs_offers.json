@@ -1,0 +1,718 @@
+{
+  "name": "Daily Jobs Offers",
+  "nodes": [
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * \nFROM search_profiles\nWHERE is_active = true;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        40,
+        -20
+      ],
+      "id": "b528bbad-a7b1-4b09-83fe-f24fabbe476f",
+      "name": "Postgres",
+      "credentials": {
+        "postgres": {
+          "id": "JaA1WnumJgg1GJCZ",
+          "name": "annonces db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 8
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -80,
+        -20
+      ],
+      "id": "68066070-98f9-411e-b524-c215f2bd4928",
+      "name": "Daily 8am"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        200,
+        -20
+      ],
+      "id": "1593fdcc-c258-4553-afa1-4e57cf4258aa",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "keywords",
+        "include": "allOtherFields",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        340,
+        60
+      ],
+      "id": "4d54c2f5-974b-4a24-9d8e-22a05f5e29df",
+      "name": "Split Out"
+    },
+    {
+      "parameters": {
+        "url": "https://api.adzuna.com/v1/api/jobs/ch/search/1",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "what",
+              "value": "={{ $json.keywords }}"
+            },
+            {
+              "name": "where",
+              "value": "={{ $json.locations[0] }}"
+            },
+            {
+              "name": "results_per_page",
+              "value": "=20"
+            },
+            {
+              "name": "app_id",
+              "value": "REDACTED_ADZUNA_APP_ID"
+            },
+            {
+              "name": "app_key",
+              "value": "REDACTED_ADZUNA_APP_KEY"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        200
+      ],
+      "id": "93bc37b1-0608-43bf-a9e5-d24036e6e05a",
+      "name": "Adzuna Search",
+      "retryOnFail": false,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://ch.jooble.org/api/REDACTED_JOOBLE_API_KEY",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "=  {\n    \"keywords\": \"{{ $json.keywords }}\",\n    \"location\": \"{{ $json.locations[0] }}\"\n  }\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        60
+      ],
+      "id": "114ffc72-900c-410e-901b-6a6e20dd598e",
+      "name": "Jooble Search",
+      "retryOnFail": false,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "function normalizeAdzunaItem(raw) {\n    return {\n      source: 'adzuna.ch',\n      source_id: raw.id,\n      title: raw.title,\n      company: raw.company ? raw.company.display_name : null,\n      url: raw.redirect_url,\n      location: raw.location ? raw.location.display_name : null,\n      posted_at: raw.created ? raw.created.slice(0, 10) : null,\n      raw_extra: {\n        description_snippet: raw.description || null,\n        salary_min: raw.salary_min || null,\n        salary_max: raw.salary_max || null,\n        contract_type: raw.contract_type || null,\n        contract_time: raw.contract_time || null,\n        category: raw.category ? raw.category.label : null,\n        description_full: raw.fullDescription || null,\n      },\n    };\n  }\n\n  const input = items[0].json;\n\n  if (!input || !Array.isArray(input.results)) {\n    // La requête a échoué (Continue On Fail) ou n'a pas la forme attendue — on log et on ne fait rien planter.\n    console.log('Adzuna: pas de résultats exploitables', JSON.stringify(input));\n    return [];\n  }\n\n  return input.results.map(item => ({ json: normalizeAdzunaItem(item) }));\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        620,
+        200
+      ],
+      "id": "f9dc0ff1-3fef-4832-ad03-fd26c6054434",
+      "name": "Normalize Adzuna"
+    },
+    {
+      "parameters": {
+        "jsCode": "function normalizeJoobleItem(raw) {\n    return {\n      source: 'jooble.ch',\n      source_id: raw.id,\n      title: raw.title,\n      company: raw.company || null,\n      url: raw.link,\n      location: raw.location || null,\n      posted_at: raw.updated ? raw.updated.slice(0, 10) : null,\n      raw_extra: {\n        description_snippet: raw.snippet || null,\n        salary: raw.salary || null,\n        type: raw.type || null,\n        source_name: raw.source || null,\n        description_full: raw.fullDescription || null,\n      },\n    };\n  }\n\n  const input = items[0].json;\n\n  if (!input || !Array.isArray(input.jobs)) {\n    console.log('Jooble: input inattendu', JSON.stringify(input));\n    return [];\n  }\n\n  return input.jobs.map(item => ({ json: normalizeJoobleItem(item) }));\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        620,
+        60
+      ],
+      "id": "87b7a2c1-a91f-4c72-bde1-fe672205955d",
+      "name": "Normalize Jooble"
+    },
+    {
+      "parameters": {
+        "url": "https://www.jobs.ch/en/vacancies/",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "term",
+              "value": "={{ $json.keywords }}"
+            },
+            {
+              "name": "location",
+              "value": "={{ $json.locations[0] }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {}
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        340
+      ],
+      "id": "c130dc93-c297-4809-a7c7-8b6919b79f36",
+      "name": "Jobs.ch search",
+      "retryOnFail": false,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const html = items[0].json.data;\n  const pattern = new RegExp('<script type=\"application/ld\\\\+json\">(.*?)<\\\\/script>', 's');\n  const match = html.match(pattern);\n  if (!match) return [];\n\n  const ldJson = JSON.parse(match[1]);\n  const itemList = ldJson.find(entry => entry['@type'] === 'ItemList');\n  if (!itemList) return [];\n\n  return itemList.itemListElement.map(entry => {\n    const job = entry.item;\n    return {\n      json: {\n        id: job.identifier ? job.identifier.value : null,\n        title: job.title,\n        company: job.hiringOrganization ? job.hiringOrganization.name : null,\n        url: job.url,\n        location: job.jobLocation && job.jobLocation.address ? job.jobLocation.address.addressLocality\n  || null : null,\n        postedDate: job.datePosted ? job.datePosted.slice(0, 10) : null,\n        contractType: job.employmentType || null,\n        remote: null,\n        description: job.description || null,\n      },\n    };\n  });"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        620,
+        340
+      ],
+      "id": "5854ca21-8b83-4830-84dc-98ac07e330a7",
+      "name": "Extract jobs.ch"
+    },
+    {
+      "parameters": {
+        "jsCode": "function normalizeJobchListing(raw) {\n    return {\n      source: 'jobs.ch',\n      source_id: raw.id,\n      title: raw.title,\n      company: raw.company,\n      url: raw.url,\n      location: raw.location,\n      posted_at: raw.postedDate || null,\n      raw_extra: {\n        contract_type: raw.contractType || null,\n        remote: raw.remote || null,\n        description: raw.description || null,\n      },\n    };\n  }\n\n  return items.map(item => ({ json: normalizeJobchListing(item.json) }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        760,
+        340
+      ],
+      "id": "d6dc9ad0-6e46-4357-800c-bae7dc3f79b8",
+      "name": "Normalize jobs.ch"
+    },
+    {
+      "parameters": {
+        "numberInputs": 3
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        880,
+        200
+      ],
+      "id": "aecf1840-327c-465f-9a00-3ae76b0fd7d6",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "jsCode": "const FRENCH_WORDS = ['et', 'le', 'la', 'les', 'des', 'pour', 'avec', 'notre', 'nos', 'vous', 'êtes',\n  'nous', 'recherchons', 'poste', 'équipe', 'expérience', 'compétences'];\n  const GERMAN_WORDS = ['und', 'der', 'die', 'das', 'mit', 'für', 'sind', 'werden', 'sie', 'ihre',\n  'unsere', 'kenntnisse', 'erfahrung', 'aufgaben', 'wir', 'suchen', 'stelle', 'unternehmen'];\n  const ITALIAN_WORDS = ['e', 'il', 'la', 'di', 'per', 'con', 'sono', 'nostra', 'nostro', 'esperienza',\n  'competenze', 'cerchiamo', 'azienda', 'lavoro'];\n  const ENGLISH_WORDS = ['the', 'and', 'you', 'our', 'for', 'with', 'are', 'will', 'team', 'looking',\n  'join', 'experience', 'skills', 'role', 'we'];\n\n  function buildMarker(words) {\n    return new RegExp('\\\\b(' + words.join('|') + ')\\\\b', 'gi');\n  }\n\n  const FRENCH_MARKERS = buildMarker(FRENCH_WORDS);\n  const GERMAN_MARKERS = buildMarker(GERMAN_WORDS);\n  const ITALIAN_MARKERS = buildMarker(ITALIAN_WORDS);\n  const ENGLISH_MARKERS = buildMarker(ENGLISH_WORDS);\n\n  const LOCATION_ALIASES = {\n    'genève': ['genève', 'geneva', 'genf', 'ginevra'],\n    'lausanne': ['lausanne', 'losanna'],\n    'neuchâtel': ['neuchâtel', 'neuenburg', 'neuchatel'],\n  };\n\n  const EXPANDED_KEYWORDS = ['database engineer', 'data architect', 'analytics engineer', 'data ops',\n  'platform engineer', 'site reliability engineer', 'sre', 'cloud engineer', 'infrastructure engineer'];\n\n  const JUNIOR_WORDS = ['junior', 'intern', 'internship', 'graduate', 'entry-level', 'entry level'];\n\n  function searchableText(listing) {\n    return [\n      listing.title || '',\n      listing.raw_extra && (listing.raw_extra.description || listing.raw_extra.description_snippet ||\n  listing.raw_extra.description_full) || '',\n    ].join(' ').toLowerCase();\n  }\n\n  function locationMatches(listing, profile) {\n    const location = (listing.location || '').toLowerCase();\n    if (!location) return false;\n    return profile.locations.some((loc) => {\n      const locLower = loc.toLowerCase();\n      const aliases = LOCATION_ALIASES[locLower] || [locLower];\n      return aliases.some(alias => location.includes(alias));\n    });\n  }\n\n  function detectForeignLanguage(listing) {\n    const text = searchableText(listing);\n    const counts = {\n      fr: (text.match(FRENCH_MARKERS) || []).length,\n      de: (text.match(GERMAN_MARKERS) || []).length,\n      it: (text.match(ITALIAN_MARKERS) || []).length,\n      en: (text.match(ENGLISH_MARKERS) || []).length,\n    };\n\n    const nonFrenchMax = Math.max(counts.de, counts.it, counts.en);\n\n    if (counts.fr >= 2 && counts.fr >= nonFrenchMax) return null;\n    if (nonFrenchMax < 2) return null;\n\n    if (counts.de === nonFrenchMax) return 'de';\n    if (counts.it === nonFrenchMax) return 'it';\n    return 'en';\n  }\n\n  function scoreListing(listing, profile) {\n    const text = searchableText(listing);\n\n    const matchedCore = profile.keywords.filter(kw => text.includes(kw.toLowerCase()));\n    const matchedExpanded = EXPANDED_KEYWORDS.filter(kw => text.includes(kw));\n\n    if (matchedCore.length === 0 && matchedExpanded.length === 0) return 0;\n\n    let score = matchedCore.length * 3 + matchedExpanded.length * 1;\n\n    const isJunior = JUNIOR_WORDS.some(w => new RegExp(`\\\\b${w}\\\\b`, 'i').test(text));\n    if (isJunior) score += 2;\n\n    if (locationMatches(listing, profile)) score += 1;\n\n    return score;\n  }\n\n  const profile = $('Loop Over Items').first().json;\n\n  return items\n    .map(item => {\n      const score = scoreListing(item.json, profile);\n      const text = searchableText(item.json);\n      const keywordsMatched = [...profile.keywords, ...EXPANDED_KEYWORDS].filter(kw =>\n  text.includes(kw.toLowerCase()));\n      return {\n        json: {\n          ...item.json,\n          matchScore: score,\n          matchCategory: score >= 3 ? 'primary' : score >= 1 ? 'secondary' : 'excluded',\n          foreignLanguage: detectForeignLanguage(item.json),\n          locationIncomplete: !item.json.location,\n          keywordsMatched,\n          searchProfileId: profile.id,\n        },\n      };\n    })\n    .filter(item => item.json.matchCategory !== 'excluded')\n    .sort((a, b) => b.json.matchScore - a.json.matchScore);"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1020,
+        200
+      ],
+      "id": "2173f9aa-5a01-42c2-b40b-97bf7c9f7cf6",
+      "name": "Filter by profile"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "7acb228b-1c5e-4ed7-8532-8890c31b0de4",
+              "leftValue": "={{ $json.foreignLanguage }}",
+              "rightValue": "fr",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1160,
+        200
+      ],
+      "id": "74572c5b-624e-4131-8f01-54dfc9e48a2f",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api-free.deepl.com/v2/translate",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "DeepL-Auth-Key REDACTED_DEEPL_API_KEY"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "text",
+              "value": "={{ $json.title }}"
+            },
+            {
+              "name": "text",
+              "value": "={{ $json.raw_extra.description || $json.raw_extra.description_snippet ||    $json.raw_extra.description_full || '' }}"
+            },
+            {
+              "name": "target_lang",
+              "value": "FR"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1320,
+        100
+      ],
+      "id": "fa7f7fd2-c75e-4971-8512-03856a1aa556",
+      "name": "Traduction Deepl"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        1680,
+        200
+      ],
+      "id": "85358100-cea2-4eb9-86ab-841a90bd8461",
+      "name": "Merge1"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const original = $('Filter by profile').item.json;\n  const translations = $json.translations || [];\n\n  return {\n    json: {\n      ...original,\n      title: translations[0] ? translations[0].text : original.title,\n      raw_extra: {\n        ...original.raw_extra,\n        description_fr: translations[1] ? translations[1].text : null,\n        title_original: original.title,\n      },\n    },\n  };\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1480,
+        100
+      ],
+      "id": "08649c06-159a-45e5-b124-12e79ae7406c",
+      "name": "Get Payload back"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": " INSERT INTO job_listings (\n    source, source_id, title, company, url, location,\n    keywords_matched, search_profile_id, posted_at, raw_extra,\n    match_score, match_category, location_incomplete, foreign_language\n  ) VALUES (\n    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14\n  )\n  ON CONFLICT (source, source_id) DO UPDATE SET\n    last_checked_at = now(),\n    raw_extra = EXCLUDED.raw_extra,\n    match_score = EXCLUDED.match_score,\n    match_category = EXCLUDED.match_category,\n    location_incomplete = EXCLUDED.location_incomplete,\n    foreign_language = EXCLUDED.foreign_language\n  RETURNING id, (xmax = 0) AS is_new_row;\n",
+        "options": {
+          "queryReplacement": "={{ [$json.source, String($json.source_id), $json.title, $json.company, $json.url, $json.location,\n  $json.keywordsMatched, $json.searchProfileId, $json.posted_at, JSON.stringify($json.raw_extra),\n  $json.matchScore, $json.matchCategory, $json.locationIncomplete, $json.foreignLanguage] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1820,
+        200
+      ],
+      "id": "a6309cd6-6870-4824-a3a0-05064bcce496",
+      "name": "Absorption",
+      "credentials": {
+        "postgres": {
+          "id": "JaA1WnumJgg1GJCZ",
+          "name": "annonces db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "DELETE FROM job_listings\n  WHERE last_checked_at < now() - interval '20 days'\n    AND is_read = false\n    AND is_favorite = false;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        780,
+        -120
+      ],
+      "id": "190cf868-98df-467e-a48f-2c9ac7fcea47",
+      "name": "Nettoyage",
+      "credentials": {
+        "postgres": {
+          "id": "JaA1WnumJgg1GJCZ",
+          "name": "annonces db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": " SELECT * FROM job_listings\n  WHERE created_at::date = CURRENT_DATE\n  ORDER BY match_category, match_score DESC;\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        340,
+        -120
+      ],
+      "id": "bbb879c1-6db2-4036-bc0d-cb98ad170b0b",
+      "name": "SELECT offers",
+      "executeOnce": true,
+      "credentials": {
+        "postgres": {
+          "id": "JaA1WnumJgg1GJCZ",
+          "name": "annonces db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "function decodeEntities(s) {\n  var out = String(s || '');\n  out = out.split('&nbsp;').join(' ');\n  out = out.split('&amp;').join('&');\n  out = out.split('&lt;').join('<');\n  out = out.split('&gt;').join('>');\n  out = out.split('&quot;').join('\"');\n  out = out.split('&#39;').join(\"'\");\n  return out;\n}\n\nfunction stripTags(s) {\n  return String(s || '').replace(/<[^>]*>/g, ' ');\n}\n\nfunction cleanText(s) {\n  var out = decodeEntities(s);\n  out = stripTags(out);\n  out = out.replace(/\\s+/g, ' ').trim();\n  return out;\n}\n\nfunction truncate(s, max) {\n  if (s.length <= max) return s;\n  return s.slice(0, max).trim() + '…';\n}\n\nfunction escapeHtml(s) {\n  var out = String(s || '');\n  out = out.split('&').join('&amp;');\n  out = out.split('<').join('&lt;');\n  out = out.split('>').join('&gt;');\n  return out;\n}\n\nfunction getDisplayTitle(item) {\n  var raw = item.raw_extra || {};\n  var original = raw.title_original;\n  if (original && String(original).trim().length > 0) {\n    return original;\n  }\n  return item.title;\n}\n\nvar JUNIOR_REGEX = new RegExp(\n  '\\\\b(junior|intern|internship|apprenti|apprentissage|stagiaire|' +\n  'trainee|graduate|entry.level|working student)\\\\b',\n  'i'\n);\n\nfunction isJuniorOrIntern(item) {\n  var text = cleanText(getDisplayTitle(item));\n  return JUNIOR_REGEX.test(text);\n}\n\nfunction sortJuniorFirst(list) {\n  return list\n    .map(function (item, idx) { return { item: item, idx: idx }; })\n    .sort(function (a, b) {\n      var aJunior = isJuniorOrIntern(a.item) ? 0 : 1;\n      var bJunior = isJuniorOrIntern(b.item) ? 0 : 1;\n      if (aJunior !== bJunior) return aJunior - bJunior;\n      return a.idx - b.idx;\n    })\n    .map(function (wrapped) { return wrapped.item; });\n}\n\nfunction buildCard(item, accent) {\n  var title = escapeHtml(truncate(cleanText(getDisplayTitle(item)), 140));\n  var company = escapeHtml(cleanText(item.company || 'Entreprise non précisée'));\n  var location = item.location\n    ? escapeHtml(cleanText(item.location))\n    : 'Localisation non précisée';\n  var badge = '';\n  if (item.foreign_language && item.foreign_language !== 'fr') {\n    var b = [];\n    b.push('<span style=\"display:inline-block;background:#f0f0f5;color:#6b6b7a;');\n    b.push('font-size:11px;padding:2px 8px;border-radius:10px;margin-left:8px;\">');\n    b.push('EN → FR</span>');\n    badge = b.join('');\n  }\n  var juniorBadge = '';\n  if (isJuniorOrIntern(item)) {\n    var jb = [];\n    jb.push('<span style=\"display:inline-block;background:#e8f8ef;color:#1a7f4b;');\n    jb.push('font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;');\n    jb.push('margin-left:8px;\">JUNIOR/INTERN</span>');\n    juniorBadge = jb.join('');\n  }\n  var row = [];\n  row.push('<tr><td style=\"padding:16px 20px;border-bottom:1px solid #ececf1;\">');\n  row.push('<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\"><tr><td>');\n  row.push('<div style=\"font-size:15px;line-height:1.4;color:#1a1a2e;font-weight:600;\">');\n  row.push(title);\n  row.push(badge);\n  row.push(juniorBadge);\n  row.push('</div>');\n  row.push('<div style=\"font-size:13px;color:#6b6b7a;margin-top:4px;\">');\n  row.push(company);\n  row.push(' · ');\n  row.push(location);\n  row.push('</div>');\n  row.push('<div style=\"margin-top:10px;\">');\n  row.push('<a href=\"');\n  row.push(escapeHtml(item.url || ''));\n  row.push('\" style=\"display:inline-block;font-size:13px;font-weight:600;color:#fff;');\n  row.push('background:');\n  row.push(accent);\n  row.push(';text-decoration:none;padding:6px 14px;border-radius:6px;\">');\n  row.push('Voir l\\'offre →</a>');\n  row.push('</div>');\n  row.push('</td></tr></table>');\n  row.push('</td></tr>');\n  return row.join('');\n}\n\nfunction buildSection(label, count, accent, cardsHtml) {\n  if (count === 0) return '';\n  var out = [];\n  out.push('<tr><td style=\"padding:24px 20px 8px 20px;\">');\n  out.push('<span style=\"font-size:12px;font-weight:700;letter-spacing:0.06em;');\n  out.push('text-transform:uppercase;color:');\n  out.push(accent);\n  out.push(';\">');\n  out.push(escapeHtml(label));\n  out.push(' (');\n  out.push(String(count));\n  out.push(')</span>');\n  out.push('</td></tr>');\n  out.push(cardsHtml);\n  return out.join('');\n}\n\nvar primary = [];\nvar secondary = [];\n\nfor (var i = 0; i < items.length; i++) {\n  var j = items[i].json;\n  if (j.match_category === 'primary') {\n    primary.push(j);\n  } else {\n    secondary.push(j);\n  }\n}\n\nvar today = new Date();\nvar dd = String(today.getDate()).padStart(2, '0');\nvar mm = String(today.getMonth() + 1).padStart(2, '0');\nvar yyyy = today.getFullYear();\nvar dateStr = dd + '.' + mm + '.' + yyyy;\n\nvar total = primary.length + secondary.length;\n\nvar subjectParts = [];\nsubjectParts.push('ANNONCES — ');\nsubjectParts.push(String(total));\nsubjectParts.push(' nouvelle(s) offre(s) du ');\nsubjectParts.push(dateStr);\nvar subject = subjectParts.join('');\n\nprimary = sortJuniorFirst(primary);\nsecondary = sortJuniorFirst(secondary);\n\nvar primaryAccent = '#4f46e5';\nvar secondaryAccent = '#8b8b99';\n\nvar primaryCards = [];\nfor (var p = 0; p < primary.length; p++) {\n  primaryCards.push(buildCard(primary[p], primaryAccent));\n}\n\nvar secondaryCards = [];\nfor (var s = 0; s < secondary.length; s++) {\n  secondaryCards.push(buildCard(secondary[s], secondaryAccent));\n}\n\nvar html = [];\nhtml.push('<div style=\"background:#f4f4f8;padding:32px 12px;font-family:');\nhtml.push('-apple-system,BlinkMacSystemFont,\\'Segoe UI\\',Roboto,Arial,sans-serif;\">');\nhtml.push('<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" ');\nhtml.push('style=\"max-width:640px;margin:0 auto;background:#ffffff;border-radius:12px;');\nhtml.push('overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);\">');\n\nhtml.push('<tr><td style=\"padding:28px 20px;background:#1a1a2e;\">');\nhtml.push('<div style=\"color:#ffffff;font-size:18px;font-weight:700;\">');\nhtml.push('Nouvelles offres du jour');\nhtml.push('</div>');\nhtml.push('<div style=\"color:#a0a0b8;font-size:13px;margin-top:4px;\">');\nhtml.push(dateStr);\nhtml.push(' — ');\nhtml.push(String(total));\nhtml.push(' offre(s) correspondant à ton profil');\nhtml.push('</div>');\nhtml.push('</td></tr>');\n\nhtml.push(buildSection('Offres principales', primary.length, primaryAccent, primaryCards.join('')));\nhtml.push(buildSection('Offres secondaires — matching faible', secondary.length, secondaryAccent, secondaryCards.join('')));\n\nhtml.push('<tr><td style=\"padding:20px;text-align:center;\">');\nhtml.push('<span style=\"font-size:11px;color:#a0a0b8;\">');\nhtml.push('Envoyé automatiquement par n8n');\nhtml.push('</span>');\nhtml.push('</td></tr>');\n\nhtml.push('</table></div>');\n\nreturn [{ json: { subject: subject, html: html.join('') } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        -120
+      ],
+      "id": "f7df6bad-503f-442c-a564-951f4709bfd9",
+      "name": "Formater Digest"
+    },
+    {
+      "parameters": {
+        "fromEmail": "dimitri_nguyen@proton.me",
+        "toEmail": "dimitri_nguyen@proton.me",
+        "subject": "={{ $json.subject }}",
+        "html": "={{ $json.html }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        620,
+        -120
+      ],
+      "id": "1461e533-7fab-4fca-9b71-9f5889d21368",
+      "name": "Send Email",
+      "notesInFlow": false,
+      "credentials": {
+        "smtp": {
+          "id": "j8FyGiLN5pZcvyG5",
+          "name": "SMTP account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Daily 8am": {
+      "main": [
+        [
+          {
+            "node": "Postgres",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [
+          {
+            "node": "SELECT offers",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Split Out",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out": {
+      "main": [
+        [
+          {
+            "node": "Adzuna Search",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Jooble Search",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Jobs.ch search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Adzuna Search": {
+      "main": [
+        [
+          {
+            "node": "Normalize Adzuna",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Jooble Search": {
+      "main": [
+        [
+          {
+            "node": "Normalize Jooble",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Jobs.ch search": {
+      "main": [
+        [
+          {
+            "node": "Extract jobs.ch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract jobs.ch": {
+      "main": [
+        [
+          {
+            "node": "Normalize jobs.ch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Jooble": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Adzuna": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Normalize jobs.ch": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Filter by profile",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter by profile": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Traduction Deepl",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Traduction Deepl": {
+      "main": [
+        [
+          {
+            "node": "Get Payload back",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Payload back": {
+      "main": [
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge1": {
+      "main": [
+        [
+          {
+            "node": "Absorption",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Absorption": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SELECT offers": {
+      "main": [
+        [
+          {
+            "node": "Formater Digest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Formater Digest": {
+      "main": [
+        [
+          {
+            "node": "Send Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Email": {
+      "main": [
+        [
+          {
+            "node": "Nettoyage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "42fd34a6-3917-4307-ae73-9474ca1a899e",
+  "meta": {
+    "instanceId": "0dbb1e602ea106585e16092042137fd67137f34bcde26e9a2299aae124476647"
+  },
+  "id": "cDw8H5dLv2SiQDPB",
+  "tags": []
+}
