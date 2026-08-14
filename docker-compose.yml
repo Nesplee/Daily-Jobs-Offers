@@ -22,12 +22,15 @@ services:
     # 127.0.0.1:${POSTGRES_PORT} and, more importantly, lets the Send Email
     # node reach Proton Mail Bridge's SMTP proxy, which only listens on the
     # host's 127.0.0.1 — unreachable from an isolated Docker network.
-    # N8N_LISTEN_ADDRESS restores the localhost-only exposure that the
-    # removed "ports: 127.0.0.1:5678:5678" mapping used to provide, since
-    # host networking would otherwise bind n8n to all host interfaces.
+    # N8N_LISTEN_ADDRESS restores a scoped exposure that the removed
+    # "ports: 127.0.0.1:5678:5678" mapping used to provide, since host
+    # networking would otherwise bind n8n to all host interfaces. Defaults
+    # to localhost-only; set N8N_LISTEN_ADDRESS in .env to a Tailscale
+    # interface IP (or similar) to reach n8n from other devices without
+    # exposing it on the public interface.
     network_mode: host
     environment:
-      N8N_LISTEN_ADDRESS: 127.0.0.1
+      N8N_LISTEN_ADDRESS: ${N8N_LISTEN_ADDRESS:-127.0.0.1}
       # n8n defaults to America/New_York when unset, which would fire the
       # "Daily 8am" schedule trigger at 8am New York time (14h en Suisse en
       # été) instead of 8h locales.
