@@ -31,6 +31,15 @@ services:
     network_mode: host
     environment:
       N8N_LISTEN_ADDRESS: ${N8N_LISTEN_ADDRESS:-127.0.0.1}
+      # n8n refuses to set its auth cookie over a non-localhost origin
+      # unless served over HTTPS. On the VPS, N8N_PROTOCOL/SSL_KEY/SSL_CERT
+      # point at a Tailscale-issued cert (`tailscale cert <magicdns-name>`,
+      # renews on re-run — see docs/tailscale-cardtracker-instructions.md
+      # for the equivalent DE_CARDTRACKER setup). Left empty/http for local
+      # use, where n8n is reached via localhost and this doesn't apply.
+      N8N_PROTOCOL: ${N8N_PROTOCOL:-http}
+      N8N_SSL_KEY: ${N8N_SSL_KEY:-}
+      N8N_SSL_CERT: ${N8N_SSL_CERT:-}
       # n8n defaults to America/New_York when unset, which would fire the
       # "Daily 8am" schedule trigger at 8am New York time (14h en Suisse en
       # été) instead of 8h locales.
@@ -44,6 +53,7 @@ services:
     volumes:
       - n8n_data:/home/node/.n8n
       - ./docker/n8n/certs:/home/node/certs:ro
+      - ./tailscale-certs:/home/node/tailscale-certs:ro
     depends_on:
       - db
     restart: unless-stopped
