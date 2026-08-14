@@ -1,0 +1,130 @@
+{
+  "name": "Weekly Recap",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 8,
+              "triggerAtDayOfWeek": [6]
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -80,
+        -20
+      ],
+      "id": "d32500b3-826d-4e46-9a33-518661a33f01",
+      "name": "Saturday 8am"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": " SELECT * FROM job_listings\n  WHERE created_at >= date_trunc('week', now())\n    AND created_at < date_trunc('week', now()) + interval '6 days'\n  ORDER BY match_category, match_score DESC;\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        140,
+        -20
+      ],
+      "id": "3c21f355-5fd7-4754-b677-a54df4eee0b5",
+      "name": "SELECT week offers",
+      "executeOnce": true,
+      "credentials": {
+        "postgres": {
+          "id": "JaA1WnumJgg1GJCZ",
+          "name": "annonces db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "function decodeEntities(s) {\n  var out = String(s || '');\n  out = out.split('&nbsp;').join(' ');\n  out = out.split('&amp;').join('&');\n  out = out.split('&lt;').join('<');\n  out = out.split('&gt;').join('>');\n  out = out.split('&quot;').join('\"');\n  out = out.split('&#39;').join(\"'\");\n  return out;\n}\n\nfunction stripTags(s) {\n  return String(s || '').replace(/<[^>]*>/g, ' ');\n}\n\nfunction cleanText(s) {\n  var out = decodeEntities(s);\n  out = stripTags(out);\n  out = out.replace(/\\s+/g, ' ').trim();\n  return out;\n}\n\nfunction truncate(s, max) {\n  if (s.length <= max) return s;\n  return s.slice(0, max).trim() + '…';\n}\n\nfunction escapeHtml(s) {\n  var out = String(s || '');\n  out = out.split('&').join('&amp;');\n  out = out.split('<').join('&lt;');\n  out = out.split('>').join('&gt;');\n  out = out.split('\"').join('&quot;');\n  out = out.split(\"'\").join('&#39;');\n  return out;\n}\n\nfunction safeUrl(u) {\n  try {\n    var p = new URL(String(u || ''));\n    return (p.protocol === 'https:' || p.protocol === 'http:') ? p.href : '#';\n  } catch (e) {\n    return '#';\n  }\n}\n\nfunction getDisplayTitle(item) {\n  var raw = item.raw_extra || {};\n  var original = raw.title_original;\n  if (original && String(original).trim().length > 0) {\n    return original;\n  }\n  return item.title;\n}\n\nvar JUNIOR_REGEX = new RegExp(\n  '\\\\b(junior|intern|internship|apprenti|apprentissage|stagiaire|' +\n  'trainee|graduate|entry.level|working student)\\\\b',\n  'i'\n);\n\nfunction isJuniorOrIntern(item) {\n  var text = cleanText(getDisplayTitle(item));\n  return JUNIOR_REGEX.test(text);\n}\n\nfunction sortJuniorFirst(list) {\n  return list\n    .map(function (item, idx) { return { item: item, idx: idx }; })\n    .sort(function (a, b) {\n      var aJunior = isJuniorOrIntern(a.item) ? 0 : 1;\n      var bJunior = isJuniorOrIntern(b.item) ? 0 : 1;\n      if (aJunior !== bJunior) return aJunior - bJunior;\n      return a.idx - b.idx;\n    })\n    .map(function (wrapped) { return wrapped.item; });\n}\n\nfunction buildCard(item, accent) {\n  var title = escapeHtml(truncate(cleanText(getDisplayTitle(item)), 140));\n  var company = escapeHtml(cleanText(item.company || 'Entreprise non précisée'));\n  var location = item.location\n    ? escapeHtml(cleanText(item.location))\n    : 'Localisation non précisée';\n  var badge = '';\n  if (item.foreign_language && item.foreign_language !== 'fr') {\n    var b = [];\n    b.push('<span style=\"display:inline-block;background:#f0f0f5;color:#6b6b7a;');\n    b.push('font-size:11px;padding:2px 8px;border-radius:10px;margin-left:8px;\">');\n    b.push('EN → FR</span>');\n    badge = b.join('');\n  }\n  var juniorBadge = '';\n  if (isJuniorOrIntern(item)) {\n    var jb = [];\n    jb.push('<span style=\"display:inline-block;background:#e8f8ef;color:#1a7f4b;');\n    jb.push('font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;');\n    jb.push('margin-left:8px;\">JUNIOR/INTERN</span>');\n    juniorBadge = jb.join('');\n  }\n  var row = [];\n  row.push('<tr><td style=\"padding:16px 20px;border-bottom:1px solid #ececf1;\">');\n  row.push('<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\"><tr><td>');\n  row.push('<div style=\"font-size:15px;line-height:1.4;color:#1a1a2e;font-weight:600;\">');\n  row.push(title);\n  row.push(badge);\n  row.push(juniorBadge);\n  row.push('</div>');\n  row.push('<div style=\"font-size:13px;color:#6b6b7a;margin-top:4px;\">');\n  row.push(company);\n  row.push(' · ');\n  row.push(location);\n  row.push('</div>');\n  row.push('<div style=\"margin-top:10px;\">');\n  row.push('<a href=\"');\n  row.push(escapeHtml(safeUrl(item.url)));\n  row.push('\" style=\"display:inline-block;font-size:13px;font-weight:600;color:#fff;');\n  row.push('background:');\n  row.push(accent);\n  row.push(';text-decoration:none;padding:6px 14px;border-radius:6px;\">');\n  row.push('Voir l\\'offre →</a>');\n  row.push('</div>');\n  row.push('</td></tr></table>');\n  row.push('</td></tr>');\n  return row.join('');\n}\n\nfunction buildSection(label, count, accent, cardsHtml) {\n  if (count === 0) return '';\n  var out = [];\n  out.push('<tr><td style=\"padding:24px 20px 8px 20px;\">');\n  out.push('<span style=\"font-size:12px;font-weight:700;letter-spacing:0.06em;');\n  out.push('text-transform:uppercase;color:');\n  out.push(accent);\n  out.push(';\">');\n  out.push(escapeHtml(label));\n  out.push(' (');\n  out.push(String(count));\n  out.push(')</span>');\n  out.push('</td></tr>');\n  out.push(cardsHtml);\n  return out.join('');\n}\n\nvar primary = [];\nvar secondary = [];\n\nfor (var i = 0; i < items.length; i++) {\n  var j = items[i].json;\n  if (j.match_category === 'primary') {\n    primary.push(j);\n  } else {\n    secondary.push(j);\n  }\n}\n\nfunction fmt(d) {\n  var dd = String(d.getDate()).padStart(2, '0');\n  var mm = String(d.getMonth() + 1).padStart(2, '0');\n  return dd + '.' + mm;\n}\n\nvar today = new Date();\nvar dayOfWeek = today.getDay() === 0 ? 7 : today.getDay(); // lundi=1 ... dimanche=7\nvar monday = new Date(today);\nmonday.setDate(today.getDate() - (dayOfWeek - 1));\nvar rangeStr = fmt(monday) + ' au ' + fmt(today);\n\nvar total = primary.length + secondary.length;\n\nvar subjectParts = [];\nsubjectParts.push('ANNONCES — Récap hebdo — ');\nsubjectParts.push(String(total));\nsubjectParts.push(' offre(s) de la semaine du ');\nsubjectParts.push(rangeStr);\nvar subject = subjectParts.join('');\n\nprimary = sortJuniorFirst(primary);\nsecondary = sortJuniorFirst(secondary);\n\nvar primaryAccent = '#4f46e5';\nvar secondaryAccent = '#8b8b99';\n\nvar primaryCards = [];\nfor (var p = 0; p < primary.length; p++) {\n  primaryCards.push(buildCard(primary[p], primaryAccent));\n}\n\nvar secondaryCards = [];\nfor (var s = 0; s < secondary.length; s++) {\n  secondaryCards.push(buildCard(secondary[s], secondaryAccent));\n}\n\nvar html = [];\nhtml.push('<div style=\"background:#f4f4f8;padding:32px 12px;font-family:');\nhtml.push('-apple-system,BlinkMacSystemFont,\\'Segoe UI\\',Roboto,Arial,sans-serif;\">');\nhtml.push('<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" ');\nhtml.push('style=\"max-width:640px;margin:0 auto;background:#ffffff;border-radius:12px;');\nhtml.push('overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);\">');\n\nhtml.push('<tr><td style=\"padding:28px 20px;background:#1a1a2e;\">');\nhtml.push('<div style=\"color:#ffffff;font-size:18px;font-weight:700;\">');\nhtml.push('Récap hebdomadaire');\nhtml.push('</div>');\nhtml.push('<div style=\"color:#a0a0b8;font-size:13px;margin-top:4px;\">');\nhtml.push('Semaine du ');\nhtml.push(rangeStr);\nhtml.push(' — ');\nhtml.push(String(total));\nhtml.push(' offre(s) correspondant à ton profil');\nhtml.push('</div>');\nhtml.push('</td></tr>');\n\nhtml.push(buildSection('Offres principales', primary.length, primaryAccent, primaryCards.join('')));\nhtml.push(buildSection('Offres secondaires — matching faible', secondary.length, secondaryAccent, secondaryCards.join('')));\n\nhtml.push('<tr><td style=\"padding:20px;text-align:center;\">');\nhtml.push('<span style=\"font-size:11px;color:#a0a0b8;\">');\nhtml.push('Envoyé automatiquement par n8n — récap du samedi, filet de sécurité si le digest quotidien a été manqué');\nhtml.push('</span>');\nhtml.push('</td></tr>');\n\nhtml.push('</table></div>');\n\nreturn [{ json: { subject: subject, html: html.join('') } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        360,
+        -20
+      ],
+      "id": "fe5d732c-5ac2-43f3-8d38-09a65c2e252f",
+      "name": "Formater Récap"
+    },
+    {
+      "parameters": {
+        "fromEmail": "dimitri_nguyen@proton.me",
+        "toEmail": "dimitri_nguyen@proton.me",
+        "subject": "={{ $json.subject }}",
+        "html": "={{ $json.html }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        580,
+        -20
+      ],
+      "id": "cf2b6999-fe92-4807-b953-7f24162cd3d1",
+      "name": "Send Email",
+      "notesInFlow": false,
+      "credentials": {
+        "smtp": {
+          "id": "j8FyGiLN5pZcvyG5",
+          "name": "SMTP account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Saturday 8am": {
+      "main": [
+        [
+          {
+            "node": "SELECT week offers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SELECT week offers": {
+      "main": [
+        [
+          {
+            "node": "Formater Récap",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Formater Récap": {
+      "main": [
+        [
+          {
+            "node": "Send Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "instanceId": "0dbb1e602ea106585e16092042137fd67137f34bcde26e9a2299aae124476647"
+  },
+  "tags": []
+}
