@@ -46,6 +46,14 @@ services:
       N8N_SSL_KEY: ${N8N_SSL_KEY:-}
       N8N_SSL_CERT: ${N8N_SSL_CERT:-}
       GENERIC_TIMEZONE: Europe/Zurich
+      # Adzuna/Jooble/DeepL credentials, read by the "Adzuna Search",
+      # "Jooble Search" and "Traduction Deepl" nodes via {{ $env.VAR }}
+      # expressions instead of being hardcoded in the node parameters —
+      # keeps them out of every `n8n export:workflow` output.
+      ADZUNA_APP_ID: ${ADZUNA_APP_ID}
+      ADZUNA_API_KEY: ${ADZUNA_API_KEY}
+      JOOBLE_API_KEY: ${JOOBLE_API_KEY}
+      DEEPL_API_KEY: ${DEEPL_API_KEY}
       # Trusts Proton Mail Bridge's self-signed local SMTP certificate
       # without disabling TLS verification globally (which would also
       # weaken the DeepL HTTPS calls). Machine-specific: Bridge regenerates

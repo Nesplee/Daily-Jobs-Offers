@@ -90,11 +90,11 @@
             },
             {
               "name": "app_id",
-              "value": "REDACTED_ADZUNA_APP_ID"
+              "value": "={{ $env.ADZUNA_APP_ID }}"
             },
             {
               "name": "app_key",
-              "value": "REDACTED_ADZUNA_APP_KEY"
+              "value": "={{ $env.ADZUNA_API_KEY }}"
             }
           ]
         },
@@ -114,7 +114,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "=https://ch.jooble.org/api/REDACTED_JOOBLE_API_KEY",
+        "url": "=https://ch.jooble.org/api/{{ $env.JOOBLE_API_KEY }}",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "=  {\n    \"keywords\": \"{{ $json.keywords }}\",\n    \"location\": \"{{ $json.locations[0] }}\"\n  }\n",
@@ -284,7 +284,7 @@
           "parameters": [
             {
               "name": "Authorization",
-              "value": "DeepL-Auth-Key REDACTED_DEEPL_API_KEY"
+              "value": "=DeepL-Auth-Key {{ $env.DEEPL_API_KEY }}"
             }
           ]
         },
