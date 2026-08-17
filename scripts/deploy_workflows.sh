@@ -11,4 +11,17 @@ docker compose cp n8n/workflows "n8n:/tmp/deploy_workflows"
 docker compose exec -T n8n n8n import:workflow --separate --input=/tmp/deploy_workflows
 docker compose exec -T n8n rm -rf /tmp/deploy_workflows
 
-echo "Workflows deployed."
+# n8n's import CLI always deactivates whatever it imports, regardless of the
+# "active" field in the JSON ("Remember to activate later") — restore each
+# workflow's active state from its own JSON (not a blanket --all, so a
+# workflow deliberately set to active:false in the repo stays off), then
+# restart so it takes effect (activation changes are queued in the DB but
+# ignored by a still-running process until restart).
+for f in n8n/workflows/*.json; do
+  id=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1])).get('id',''))" "$f")
+  active=$(python3 -c "import json,sys; print(str(json.load(open(sys.argv[1])).get('active', False)).lower())" "$f")
+  [ -n "$id" ] && docker compose exec -T n8n n8n update:workflow --id="$id" --active="$active"
+done
+docker compose restart n8n
+
+echo "Workflows deployed and reactivated."
