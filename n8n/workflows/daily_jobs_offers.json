@@ -17,7 +17,7 @@
       "name": "Postgres",
       "credentials": {
         "postgres": {
-          "id": "JaA1WnumJgg1GJCZ",
+          "id": "zIIUfintNuifHQcc",
           "name": "annonces db"
         }
       }
@@ -360,7 +360,7 @@
       "name": "Absorption",
       "credentials": {
         "postgres": {
-          "id": "JaA1WnumJgg1GJCZ",
+          "id": "zIIUfintNuifHQcc",
           "name": "annonces db"
         }
       }
@@ -381,7 +381,7 @@
       "name": "Nettoyage",
       "credentials": {
         "postgres": {
-          "id": "JaA1WnumJgg1GJCZ",
+          "id": "zIIUfintNuifHQcc",
           "name": "annonces db"
         }
       }
@@ -403,7 +403,7 @@
       "executeOnce": true,
       "credentials": {
         "postgres": {
-          "id": "JaA1WnumJgg1GJCZ",
+          "id": "zIIUfintNuifHQcc",
           "name": "annonces db"
         }
       }
@@ -442,7 +442,7 @@
       "notesInFlow": false,
       "credentials": {
         "smtp": {
-          "id": "j8FyGiLN5pZcvyG5",
+          "id": "z5UyWirLbWwy43ph",
           "name": "SMTP account"
         }
       }
