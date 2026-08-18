@@ -1,11 +1,11 @@
-# Export du workflow n8n
+# Workflows n8n — source de déploiement
 
-`daily_jobs_offers.json` est un export du workflow "Daily Jobs Offers" — utile comme trace versionnée de la structure du pipeline (nodes, connexions, logique de scoring/traduction/digest), pas comme source de déploiement automatique.
+`daily_jobs_offers.json` et `weekly_recap.json` sont exportés depuis l'instance n8n du VPS (`n8n export:workflow`) et versionnés ici comme **source de vérité déployable**, pas comme simple trace. Après un `git pull` sur le VPS, `scripts/deploy_workflows.sh` les réimporte dans n8n via sa CLI (`n8n import:workflow`), qui met à jour chaque workflow existant en place (matché par son `id` JSON top-level) plutôt que d'en créer un doublon, puis réactive et redémarre n8n (l'import désactive toujours ce qu'il importe).
 
-**Avant réimport dans une instance n8n :**
+**Ce que ces fichiers contiennent (et ne contiennent pas) :**
 
-- Les clés API sont **volontairement redacted** (`REDACTED_ADZUNA_APP_ID`, `REDACTED_ADZUNA_APP_KEY`, `REDACTED_JOOBLE_API_KEY`, `REDACTED_DEEPL_API_KEY`) dans les nodes `Adzuna Search`, `Jooble Search`, `Traduction Deepl` — à resaisir manuellement après import.
-- Les 2 credentials n8n référencés (`annonces db` Postgres, `SMTP account`) ne sont jamais inclus dans un export — n8n ne transfère jamais les identifiants en clair entre instances. À recréer manuellement et à réassigner sur les 5 nodes concernés (`Postgres`, `Absorption`, `Nettoyage`, `SELECT offers`, `Send Email`).
+- Aucune clé API en clair. `Adzuna Search`, `Jooble Search`, `Traduction Deepl` lisent leurs secrets via des expressions `{{ $env.VAR }}`, résolues depuis les variables d'environnement du conteneur n8n (déclarées dans `docker-compose.yml`, valeurs dans `.env`, jamais commité). Rien à resaisir dans n8n après import — seul `.env` doit être à jour sur la machine cible.
+- Les `id` de credentials n8n (`Postgres`/`SMTP`) référencés dans les nodes (`Postgres`, `Absorption`, `Nettoyage`, `SELECT offers`, `Send Email`, `Mark as notified`) correspondent aux credentials **déjà créées sur l'instance n8n du VPS** — ce n'est pas portable tel quel vers une instance n8n vierge : il faudrait y recréer des credentials avec ces mêmes `id`, ou réassigner les nodes manuellement après import.
 - La table `search_profiles` doit être peuplée manuellement après les migrations (le schéma est créé par les migrations, pas les données) — sinon le workflow ne fait rien silencieusement.
 
-Voir `docs/superpowers/specs/2026-08-12-job-scraper-design.md` §6 pour le détail complet du déploiement (Proton Mail Bridge, réseau Docker partagé avec Metabase, etc.).
+Voir `docs/superpowers/specs/2026-08-12-job-scraper-design.md` §6-7 pour le détail complet du déploiement (Proton Mail Bridge, réseau Docker partagé avec Metabase, flux git-based, etc.).
