@@ -268,7 +268,7 @@
     },
     {
       "parameters": {
-        "numberInputs": 5
+        "numberInputs": 6
       },
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3,
@@ -663,6 +663,50 @@
       ],
       "id": "b3ed2393-5eec-4d66-96d7-2def37fa36ef",
       "name": "Filter jobup.ch dedup vs DB"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.apify.com/v2/acts/misceres~indeed-scraper/run-sync-get-dataset-items",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "token",
+              "value": "={{ $env.APIFY_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "=  {\n    \"position\": \"{{ $json.keywords }}\",\n    \"country\": \"CH\",\n    \"location\": \"Suisse romande\",\n    \"maxItems\": 15\n  }\n",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        620
+      ],
+      "id": "9c1f6f7f-2b8d-4e5a-9e1e-6c8f6f4b5a7d",
+      "name": "Indeed Search",
+      "retryOnFail": false,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "function normalizeIndeedItem(raw) {\n    return {\n      source: 'indeed.ch',\n      source_id: raw.id,\n      title: raw.positionName,\n      company: raw.company || null,\n      url: raw.url,\n      location: raw.location || null,\n      posted_at: (raw.postingDateParsed || raw.scrapedAt || '').slice(0, 10) || null,\n      raw_extra: {\n        description_snippet: raw.description || null,\n        job_type: Array.isArray(raw.jobType) ? raw.jobType.join(', ') : (raw.jobType || null),\n        salary: raw.salary || null,\n      },\n    };\n  }\n\n  // Même remarque que pour Job-Room : n8n éclate un corps de réponse HTTP\n  // qui est un tableau JSON en un item par élément. Aucun résultat pour ce\n  // mot-clé = simplement zéro item, pas une erreur.\n  if (items.length === 0) return [];\n\n  const malformed = items.find(item => !item.json || !item.json.positionName);\n  if (malformed) {\n    // Échec explicite plutôt qu'avalé silencieusement — voir le commentaire\n    // équivalent dans \"Normalize Adzuna\".\n    throw new Error('Indeed (Apify): réponse inattendue — ' + JSON.stringify(malformed.json));\n  }\n\n  return items.map(item => ({ json: normalizeIndeedItem(item.json) }));\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        620,
+        620
+      ],
+      "id": "5a3e8c2d-9f14-4b6a-8d2c-1e7f9a6b3c4e",
+      "name": "Normalize Indeed"
     }
   ],
   "pinData": {},
@@ -734,6 +778,33 @@
             "node": "Jobup.ch search",
             "type": "main",
             "index": 0
+          },
+          {
+            "node": "Indeed Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Indeed Search": {
+      "main": [
+        [
+          {
+            "node": "Normalize Indeed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Indeed": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 5
           }
         ]
       ]
