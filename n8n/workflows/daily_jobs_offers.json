@@ -159,6 +159,56 @@
     },
     {
       "parameters": {
+        "method": "POST",
+        "url": "https://www.job-room.ch/jobadservice/api/jobAdvertisements/_search",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "page",
+              "value": "=0"
+            },
+            {
+              "name": "size",
+              "value": "=50"
+            },
+            {
+              "name": "sort",
+              "value": "=date_desc"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "=  {\n    \"keywords\": [\"{{ $json.keywords }}\"]\n  }\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        -80
+      ],
+      "id": "f7497b32-7174-4895-806c-82e141646df5",
+      "name": "Job-Room Search",
+      "retryOnFail": false,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "function cleanHtml(s) {\n    if (!s) return null;\n    return String(s).replace(/<[^>]*>/g, '').trim();\n  }\n\n  function normalizeJobRoomItem(raw) {\n    const ad = raw.jobAdvertisement || raw;\n    const content = ad.jobContent || {};\n    const descriptions = content.jobDescriptions || [];\n    const desc = descriptions.find(d => d.languageIsoCode === 'fr') || descriptions[0] || {};\n    const location = content.location || {};\n    return {\n      source: 'job-room.ch',\n      source_id: ad.id,\n      title: cleanHtml(desc.title),\n      company: content.company ? content.company.name : null,\n      url: content.externalUrl || ('https://www.job-room.ch/job-search/detail/' + ad.id),\n      location: [location.city, location.canton].filter(Boolean).join(', ') || null,\n      posted_at: ad.createdTime ? ad.createdTime.slice(0, 10) : null,\n      raw_extra: {\n        description_snippet: cleanHtml(desc.description) || null,\n        canton: location.canton || null,\n      },\n    };\n  }\n\n  const input = items[0].json;\n\n  if (!Array.isArray(input)) {\n    // Échec explicite plutôt qu'avalé silencieusement — voir le commentaire\n    // équivalent dans \"Normalize Adzuna\".\n    throw new Error('Job-Room: réponse inattendue — ' + JSON.stringify(input));\n  }\n\n  return input.map(item => ({ json: normalizeJobRoomItem(item) }));\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        620,
+        -80
+      ],
+      "id": "2618ed70-545a-420c-9e85-2f30da2df3f1",
+      "name": "Normalize Job-Room"
+    },
+    {
+      "parameters": {
         "url": "https://www.jobs.ch/en/vacancies/",
         "sendQuery": true,
         "queryParameters": {
@@ -218,7 +268,7 @@
     },
     {
       "parameters": {
-        "numberInputs": 3
+        "numberInputs": 5
       },
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3,
@@ -504,6 +554,96 @@
       ],
       "id": "ec21186a-538f-4cfc-a4a2-a633aa790a04",
       "name": "Filter jobs.ch dedup vs DB"
+    },
+    {
+      "parameters": {
+        "url": "https://www.jobup.ch/fr/emplois/",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "term",
+              "value": "={{ $json.keywords }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {}
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        480
+      ],
+      "id": "0522aea7-2cfe-49e9-9313-952d051f37ce",
+      "name": "Jobup.ch search",
+      "retryOnFail": false,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const html = items[0].json.data;\n  const pattern = new RegExp('<script type=\"application/ld\\\\+json\">(.*?)<\\\\/script>', 's');\n  const match = html.match(pattern);\n  if (!match) return [];\n\n  const ldJson = JSON.parse(match[1]);\n  const itemList = ldJson.find(entry => entry['@type'] === 'ItemList');\n  if (!itemList) return [];\n\n  const results = itemList.itemListElement.map(entry => {\n    const job = entry.item;\n    return {\n      json: {\n        id: job.identifier ? job.identifier.value : null,\n        title: job.title,\n        company: job.hiringOrganization ? job.hiringOrganization.name : null,\n        url: job.url,\n        location: job.jobLocation && job.jobLocation.address ? job.jobLocation.address.addressLocality\n  || null : null,\n        postedDate: job.datePosted ? job.datePosted.slice(0, 10) : null,\n        contractType: job.employmentType || null,\n        remote: null,\n        description: job.description || null,\n      },\n    };\n  });\n\n  const seen = new Set();\n  const deduped = [];\n  for (const item of results) {\n    const key = String(item.json.title || '').trim().toLowerCase()\n      + '|' + String(item.json.company || '').trim().toLowerCase();\n    if (seen.has(key)) continue;\n    seen.add(key);\n    deduped.push(item);\n  }\n\n  return deduped;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        620,
+        480
+      ],
+      "id": "798c97d0-2dd2-4b05-9595-2349541cc818",
+      "name": "Extract jobup.ch"
+    },
+    {
+      "parameters": {
+        "jsCode": "function normalizeJobupListing(raw) {\n    return {\n      source: 'jobup.ch',\n      source_id: raw.id,\n      title: raw.title,\n      company: raw.company,\n      url: raw.url,\n      location: raw.location,\n      posted_at: raw.postedDate || null,\n      raw_extra: {\n        contract_type: raw.contractType || null,\n        remote: raw.remote || null,\n        description: raw.description || null,\n      },\n    };\n  }\n\n  return items.map(item => ({ json: normalizeJobupListing(item.json) }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        760,
+        480
+      ],
+      "id": "0b9a36db-8cf6-422b-a2f1-fb743bcbf542",
+      "name": "Normalize jobup.ch"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT DISTINCT lower(trim(title)) AS title, lower(trim(company)) AS company\n  FROM job_listings\n  WHERE source = 'jobup.ch'\n    AND created_at >= now() - interval '14 days';\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        880,
+        480
+      ],
+      "id": "fe4bfec1-b3e0-4512-ad72-5caa0130e72b",
+      "name": "Recent jobup.ch listings",
+      "executeOnce": true,
+      "credentials": {
+        "postgres": {
+          "id": "zIIUfintNuifHQcc",
+          "name": "annonces db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Dédoublonnage inter-jours : même garde-fou que pour jobs.ch, par\n// précaution — jobup.ch partage l'infrastructure JobCloud avec jobs.ch et\n// pourrait avoir le même comportement de réattribution d'ID à la\n// republication d'une offre déjà vue les jours précédents.\nconst recent = $('Recent jobup.ch listings').all().map(i => i.json);\nconst seen = new Set(recent.map(r => (r.title || '') + '|' + (r.company || '')));\n\nconst incoming = $('Normalize jobup.ch').all();\nreturn incoming.filter(item => {\n  const key = String(item.json.title || '').trim().toLowerCase()\n    + '|' + String(item.json.company || '').trim().toLowerCase();\n  return !seen.has(key);\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1000,
+        480
+      ],
+      "id": "b3ed2393-5eec-4d66-96d7-2def37fa36ef",
+      "name": "Filter jobup.ch dedup vs DB"
     }
   ],
   "pinData": {},
@@ -565,6 +705,93 @@
             "node": "Jobs.ch search",
             "type": "main",
             "index": 0
+          },
+          {
+            "node": "Job-Room Search",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Jobup.ch search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Job-Room Search": {
+      "main": [
+        [
+          {
+            "node": "Normalize Job-Room",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Job-Room": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 3
+          }
+        ]
+      ]
+    },
+    "Jobup.ch search": {
+      "main": [
+        [
+          {
+            "node": "Extract jobup.ch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract jobup.ch": {
+      "main": [
+        [
+          {
+            "node": "Normalize jobup.ch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize jobup.ch": {
+      "main": [
+        [
+          {
+            "node": "Recent jobup.ch listings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recent jobup.ch listings": {
+      "main": [
+        [
+          {
+            "node": "Filter jobup.ch dedup vs DB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter jobup.ch dedup vs DB": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 4
           }
         ]
       ]
