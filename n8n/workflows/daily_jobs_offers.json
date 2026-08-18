@@ -347,10 +347,6 @@
               "value": "={{ $json.title }}"
             },
             {
-              "name": "text",
-              "value": "={{ $json.raw_extra.description || $json.raw_extra.description_snippet ||    $json.raw_extra.description_full || '' }}"
-            },
-            {
               "name": "target_lang",
               "value": "FR"
             }
@@ -375,6 +371,51 @@
       "name": "Traduction Deepl"
     },
     {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api-free.deepl.com/v2/translate",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=DeepL-Auth-Key {{ $env.DEEPL_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "text",
+              "value": "={{ $('Filter by profile').item.json.raw_extra.description || $('Filter by profile').item.json.raw_extra.description_snippet || $('Filter by profile').item.json.raw_extra.description_full || '' }}"
+            },
+            {
+              "name": "target_lang",
+              "value": "FR"
+            }
+          ]
+        },
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 1100
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1400,
+        -40
+      ],
+      "id": "6e2a7c1b-3f45-4d8e-9a2b-7c5d8e1f4a6b",
+      "name": "Traduction Deepl Description"
+    },
+    {
       "parameters": {},
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3,
@@ -388,7 +429,7 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const original = $('Filter by profile').item.json;\n  const translations = $json.translations || [];\n\n  return {\n    json: {\n      ...original,\n      title: translations[0] ? translations[0].text : original.title,\n      raw_extra: {\n        ...original.raw_extra,\n        description_fr: translations[1] ? translations[1].text : null,\n        title_original: original.title,\n      },\n    },\n  };\n"
+        "jsCode": "// Deux appels DeepL séparés (un pour le titre, un pour la description) au\n  // lieu d'un seul appel avec deux paramètres \"text\" — n8n construit le\n  // corps form-urlencoded à partir d'un objet clé/valeur, donc deux entrées\n  // nommées \"text\" s'écrasaient silencieusement l'une l'autre et seule la\n  // traduction de la description était renvoyée, stockée à tort comme titre\n  // (ex: \"Nous ouvrons un poste d'IT Tooling / DevOps Specialist pour...\").\n  const original = $('Filter by profile').item.json;\n  const titleTranslations = $('Traduction Deepl').item.json.translations || [];\n  const descTranslations = $json.translations || [];\n\n  return {\n    json: {\n      ...original,\n      title: titleTranslations[0] ? titleTranslations[0].text : original.title,\n      raw_extra: {\n        ...original.raw_extra,\n        description_fr: descTranslations[0] ? descTranslations[0].text : null,\n        title_original: original.title,\n      },\n    },\n  };\n"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -1004,6 +1045,17 @@
       ]
     },
     "Traduction Deepl": {
+      "main": [
+        [
+          {
+            "node": "Traduction Deepl Description",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Traduction Deepl Description": {
       "main": [
         [
           {
