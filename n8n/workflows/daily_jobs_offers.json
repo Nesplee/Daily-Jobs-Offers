@@ -389,7 +389,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": " SELECT * FROM job_listings\n  WHERE created_at::date = CURRENT_DATE\n  ORDER BY match_category, match_score DESC;\n",
+        "query": " SELECT * FROM job_listings\n  WHERE notified_at IS NULL\n  ORDER BY match_category, match_score DESC;\n",
         "options": {}
       },
       "type": "n8n-nodes-base.postgres",
@@ -446,6 +446,64 @@
           "name": "SMTP account"
         }
       }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE job_listings SET notified_at = now()\n  WHERE id = ANY($1::uuid[]);\n",
+        "options": {
+          "queryReplacement": "={{ [ $('SELECT offers').all().map(i => i.json.id) ] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        780,
+        -120
+      ],
+      "id": "84c18dc6-c014-40bb-9ab8-ee5b9a975296",
+      "name": "Mark as notified",
+      "credentials": {
+        "postgres": {
+          "id": "zIIUfintNuifHQcc",
+          "name": "annonces db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT DISTINCT lower(trim(title)) AS title, lower(trim(company)) AS company\n  FROM job_listings\n  WHERE source = 'jobs.ch'\n    AND created_at >= now() - interval '14 days';\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        880,
+        340
+      ],
+      "id": "9035aa92-cb79-4b4f-82f0-023b525070fb",
+      "name": "Recent jobs.ch listings",
+      "executeOnce": true,
+      "credentials": {
+        "postgres": {
+          "id": "zIIUfintNuifHQcc",
+          "name": "annonces db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Dédoublonnage inter-jours : jobs.ch réattribue parfois un nouvel\n// identifiant à une offre déjà republiée les jours précédents (source_id\n// instable), ce que la contrainte UNIQUE (source, source_id) ne peut pas\n// détecter puisque les identifiants diffèrent réellement. On compare donc\n// par (title, company) normalisés contre les 14 derniers jours.\nconst recent = $('Recent jobs.ch listings').all().map(i => i.json);\nconst seen = new Set(recent.map(r => (r.title || '') + '|' + (r.company || '')));\n\nconst incoming = $('Normalize jobs.ch').all();\nreturn incoming.filter(item => {\n  const key = String(item.json.title || '').trim().toLowerCase()\n    + '|' + String(item.json.company || '').trim().toLowerCase();\n  return !seen.has(key);\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1000,
+        340
+      ],
+      "id": "ec21186a-538f-4cfc-a4a2-a633aa790a04",
+      "name": "Filter jobs.ch dedup vs DB"
     }
   ],
   "pinData": {},
@@ -581,9 +639,9 @@
       "main": [
         [
           {
-            "node": "Merge",
+            "node": "Recent jobs.ch listings",
             "type": "main",
-            "index": 2
+            "index": 0
           }
         ]
       ]
@@ -698,9 +756,42 @@
       "main": [
         [
           {
+            "node": "Mark as notified",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark as notified": {
+      "main": [
+        [
+          {
             "node": "Nettoyage",
             "type": "main",
             "index": 0
+          }
+        ]
+      ]
+    },
+    "Recent jobs.ch listings": {
+      "main": [
+        [
+          {
+            "node": "Filter jobs.ch dedup vs DB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter jobs.ch dedup vs DB": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 2
           }
         ]
       ]
