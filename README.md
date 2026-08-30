@@ -36,8 +36,6 @@ Every morning at 8am, an n8n cron trigger walks through each active search profi
 
 The interesting part isn't wiring six HTTP calls together. It's that every source lies about search relevance in a different way, so the pipeline can't trust any of them and re-filters everything itself in one shared node. It's discovering an undocumented search endpoint by reading a public site's network traffic. It's a translation bug that silently swapped job titles and descriptions for weeks before a user report led back to raw execution data in n8n's own SQLite store. None of this shows up in a demo, only in what breaks in production and how it gets diagnosed.
 
-**[Read the full design log](docs/superpowers/specs/2026-08-12-job-scraper-design.md)**, a decision-by-decision record of the v1 plan, the v1.1 hardening pass, and the v1.2 source extension, including every bug and the reasoning behind each fix.
-
 </div>
 
 <img src=".assets/divider.png" width="100%" alt="" />
@@ -183,7 +181,6 @@ scripts/
 tests/
   db/                          Bash tests against a real Postgres instance (schema, dedup, TTL, roles)
   logic/                       Node.js unit tests for n8n/logic/*.js
-docs/superpowers/specs/      Full design log: decisions, bugs found, trade-offs accepted
 ```
 
 <img src=".assets/divider.png" width="100%" alt="" />
