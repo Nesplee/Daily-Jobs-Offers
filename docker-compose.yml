@@ -55,6 +55,9 @@ services:
       JOOBLE_API_KEY: ${JOOBLE_API_KEY}
       DEEPL_API_KEY: ${DEEPL_API_KEY}
       APIFY_API_KEY: ${APIFY_API_KEY}
+      # Digest sender/recipient, read by the "Send Email" nodes via
+      # {{ $env.DIGEST_EMAIL }} instead of being hardcoded in the workflow.
+      DIGEST_EMAIL: ${DIGEST_EMAIL}
       # Trusts Proton Mail Bridge's self-signed local SMTP certificate
       # without disabling TLS verification globally (which would also
       # weaken the DeepL HTTPS calls). Machine-specific: Bridge regenerates

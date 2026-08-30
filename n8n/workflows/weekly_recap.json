@@ -62,8 +62,8 @@
     },
     {
       "parameters": {
-        "fromEmail": "dimitri_nguyen@proton.me",
-        "toEmail": "dimitri_nguyen@proton.me",
+        "fromEmail": "={{ $env.DIGEST_EMAIL }}",
+        "toEmail": "={{ $env.DIGEST_EMAIL }}",
         "subject": "={{ $json.subject }}",
         "html": "={{ $json.html }}",
         "options": {
