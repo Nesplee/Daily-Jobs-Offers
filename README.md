@@ -21,7 +21,6 @@
     <img src="https://img.shields.io/badge/-Build%20%26%20Run-2b3137?style=flat-square" alt="Build & Run" />
     <img src="https://img.shields.io/badge/-Production%20Hardening-2b3137?style=flat-square" alt="Production Hardening" />
     <img src="https://img.shields.io/badge/-Deployment-2b3137?style=flat-square" alt="Deployment" />
-    <img src="https://img.shields.io/badge/-Skills%20Demonstrated-2b3137?style=flat-square" alt="Skills Demonstrated" />
   </p>
 </div>
 
@@ -213,21 +212,6 @@ node --test tests/logic/
 ./tests/db/test_upsert_query.sh
 ./tests/db/test_role_privileges.sh
 ```
-
-<img src=".assets/divider.png" width="100%" alt="" />
-
-<a name="skills-demonstrated"></a>
-<h2 align="center">Skills Demonstrated</h2>
-
-<table width="100%">
-<tr><th>Area</th><th width="46%">What it looked like in practice<img src=".assets/spacer.png" width="900" height="1" alt="" /></th></tr>
-<tr><td>Data engineering</td><td>Upsert-based deduplication, TTL-driven cleanup, and a scoring model that classifies rather than binary-rejects ambiguous results</td></tr>
-<tr><td>API integration</td><td>Six heterogeneous integrations (HTML/JSON-LD scraping, REST APIs, an undocumented endpoint, a managed scraping actor), each normalized into one shared schema</td></tr>
-<tr><td>Reverse engineering</td><td>Recovering an undocumented search endpoint and its filter parameters from network traffic and server error messages</td></tr>
-<tr><td>Production debugging</td><td>Tracing a silent translation bug back to a raw execution store, past two layers of previously plausible but wrong explanations</td></tr>
-<tr><td>Secure deployment</td><td>Moving secrets out of exported workflow files, scoping a dedicated read-only deploy key, migrating a hand-maintained VPS copy to a real git-based flow</td></tr>
-<tr><td>Trade-off judgment</td><td>Documenting and accepting deliberate compromises (fail-fast over partial digests, precision over recall on keyword matching) instead of silently working around them</td></tr>
-</table>
 
 <img src=".assets/divider.png" width="100%" alt="" />
 
