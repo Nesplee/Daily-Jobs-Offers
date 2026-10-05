@@ -615,28 +615,8 @@
     },
     {
       "parameters": {
-        "url": "https://www.jobup.ch/fr/emplois/",
-        "sendQuery": true,
-        "queryParameters": {
-          "parameters": [
-            {
-              "name": "term",
-              "value": "={{ $json.keywords }}"
-            },
-            {
-              "name": "region",
-              "value": "=34"
-            },
-            {
-              "name": "region",
-              "value": "=52"
-            },
-            {
-              "name": "region",
-              "value": "=40"
-            }
-          ]
-        },
+        "url": "=https://www.jobup.ch/fr/emplois/?region=34&region=52&region=40&term={{ encodeURIComponent($json.keywords) }}",
+        "sendQuery": false,
         "options": {
           "response": {
             "response": {}
