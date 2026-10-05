@@ -733,7 +733,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "=  {\n    \"position\": \"{{ $json.keywords }}\",\n    \"country\": \"CH\",\n    \"location\": \"Suisse romande\",\n    \"maxItems\": 15\n  }\n",
+        "jsonBody": "=  {\n    \"position\": \"{{ $json.keywords }}\",\n    \"country\": \"CH\",\n    \"location\": \"{{ $json.locations[0] }}\",\n    \"maxItems\": 5\n  }\n",
         "options": {
           "timeout": 300000
         }
