@@ -2,7 +2,7 @@
   <img src=".assets/banner.png" width="100%" alt="Daily Jobs Offers banner" />
 
   <p>
-    <b>A production job-watch pipeline that scrapes and queries six Swiss job boards every morning, deduplicates and scores the results, and delivers a same-day digest with zero manual intervention.</b>
+    <b>A production job-watch pipeline that scrapes and queries nine Swiss job sources every weekday morning, deduplicates and scores the results, and delivers a same-day digest with zero manual intervention.</b>
   </p>
 
   <p>
@@ -31,9 +31,9 @@
 
 <div align="center">
 
-Every morning at 8am, an n8n cron trigger walks through each active search profile, fans out one query per keyword, and hits six job boards in parallel: two scraped from raw HTML, two called through REST APIs, one reverse-engineered from an undocumented JSON endpoint, and one reached through a managed scraping actor. Results are filtered locally against the profile's keywords and Suisse romande locations, translated to French when needed, scored, and upserted into PostgreSQL. Anything new gets bundled into an HTML email digest; anything unread and unfavorited for more than 20 days is cleaned up automatically.
+Every weekday at 8am, an n8n cron trigger walks through each active search profile, fans out one query per keyword, and hits nine job sources in parallel: three scraped from raw HTML, four called through public JSON APIs, one reverse-engineered from an undocumented JSON endpoint, and one reached through a managed scraping actor. Results are filtered locally against the profile's keywords and Suisse romande locations, translated to French when needed, scored, and upserted into PostgreSQL. Anything new gets bundled into an HTML email digest; anything unread and unfavorited for more than 20 days is cleaned up automatically.
 
-The interesting part isn't wiring six HTTP calls together. It's that every source lies about search relevance in a different way, so the pipeline can't trust any of them and re-filters everything itself in one shared node. It's discovering an undocumented search endpoint by reading a public site's network traffic. It's a translation bug that silently swapped job titles and descriptions for weeks before a user report led back to raw execution data in n8n's own SQLite store. None of this shows up in a demo, only in what breaks in production and how it gets diagnosed.
+The interesting part isn't wiring nine HTTP calls together. It's that every source lies about search relevance in a different way, so the pipeline can't trust any of them and re-filters everything itself in one shared node. It's discovering an undocumented search endpoint by reading a public site's network traffic. It's a translation bug that silently swapped job titles and descriptions for weeks before a user report led back to raw execution data in n8n's own SQLite store. None of this shows up in a demo, only in what breaks in production and how it gets diagnosed.
 
 </div>
 
@@ -44,8 +44,8 @@ The interesting part isn't wiring six HTTP calls together. It's that every sourc
 
 This isn't a scraper that just fetches and stores. A handful of decisions separate a script that runs once from a pipeline that runs unattended, every day, without anyone checking the output first:
 
-- **Every source is filtered twice, and only the pipeline's own filter is trusted.** Job boards claim keyword and location relevance but deliver noise: a "devops" search on Job-Room returns "Business Analyst," an Indeed "Suisse romande" search returns Zurich. A single shared `Filter by profile` node re-checks every result against the title (not just the description) and hard-excludes non-Romandie locations, applied uniformly across all six sources regardless of what each one claims to have already filtered.
-- **A silent `console.log` swallowed a bug for weeks.** Adzuna and Jooble's normalization nodes logged unexpected API shapes and returned an empty array instead of failing loudly, which is exactly what hid a set of expired API keys until a routine credentials migration surfaced it. Both now `throw`, trading a single failed run for a bug that stays invisible.
+- **Every source is filtered twice, and only the pipeline's own filter is trusted.** Job boards claim keyword and location relevance but deliver noise: a "devops" search on Job-Room returns "Business Analyst," an Indeed "Suisse romande" search returns Zurich. A single shared `Filter by profile` node re-checks every result against the title (not just the description) and hard-excludes non-Romandie locations, applied uniformly across all nine sources regardless of what each one claims to have already filtered.
+- **Silent data loss is the failure mode that matters.** Adzuna and Jooble's normalization nodes once logged unexpected API shapes and returned an empty array, which hid a set of expired API keys for weeks. Later, four source nodes turned out to read only the first keyword's response and discard the rest, and Indeed returned nothing for a week because it did not recognize the requested location. None of these raised an error. Every source now emits an explicit error marker that triggers an alert email without stopping the other sources, and each fix was confirmed against live responses rather than assumed.
 - **Every allocation of state (a run, a translation call, an email send) fails without losing data.** A failed translation call falls back to the untranslated field instead of dropping the job. A failed email send leaves rows with `notified_at IS NULL` so they retry on the next run instead of vanishing. Deduplication survives a source reassigning IDs to republished listings, via an application-level `(title, company)` filter over the trailing 14 days that the database's `UNIQUE` constraint alone can't catch.
 - **Secrets and deployment followed the same discipline as the code.** All third-party keys moved out of exported n8n workflow JSON into container environment variables read via `{{ $env.VAR }}` expressions, and the production host went from a hand-maintained file copy to a real `git clone` behind a deploy key scoped to read-only access on this one repository.
 
@@ -55,10 +55,10 @@ This isn't a scraper that just fetches and stores. A handful of decisions separa
 <h2 align="center">Architecture</h2>
 
 ```text
-[n8n cron, 8:00]
+[n8n cron, 8:00, Monday to Friday]
     -> for each active search_profile
     -> for each keyword in the profile
-        -> query the 6 sources in parallel
+        -> query the 9 sources in parallel
     -> raw extraction (shared fields + source-specific raw_extra)
     -> local filtering (keyword in title, Suisse romande location)
     -> language detection + DeepL translation to French if needed
@@ -81,8 +81,8 @@ This isn't a scraper that just fetches and stores. A handful of decisions separa
 
 | Category | Sources | Example |
 | --- | :---: | --- |
-| HTML scraping | 2 | jobs.ch |
-| REST API | 2 | Adzuna |
+| HTML scraping | 3 | jobs.ch |
+| REST API | 4 | Adzuna |
 | Reverse-engineered endpoint | 1 | Job-Room |
 | Managed actor | 1 | Indeed.ch |
 
@@ -93,20 +93,23 @@ This isn't a scraper that just fetches and stores. A handful of decisions separa
 <tr><td colspan="2" align="right"><img src=".assets/badges/html-scraping.png" height="22" alt="HTML Scraping" /></td></tr>
 <tr><td align="center"><code>jobs.ch</code></td><td>Parsed from the page's <code>&lt;script type="application/ld+json"&gt;</code> block instead of CSS classes, since the structured JSON-LD is kept for SEO and survives layout changes that would break a CSS-based scraper.</td></tr>
 <tr><td align="center"><code>jobup.ch</code></td><td>Same publisher and template as jobs.ch (JobCloud), same JSON-LD extraction logic. Canton filtering via a repeated <code>region</code> query parameter, with region codes found by brute-forcing IDs and reading each page's confirmation title.</td></tr>
+<tr><td align="center">LinkedIn</td><td>Unauthenticated guest search endpoint returning HTML job cards (10 per keyword), restricted to the last 7 days so Monday's run still covers weekend postings. The canonical <code>/jobs/view/&lt;id&gt;</code> URL is rebuilt from the card's <code>data-entity-urn</code>, since card links carry per-request tracking parameters. Requests are spaced 2 seconds apart.</td></tr>
 
 <tr><td colspan="2" align="right"><img src=".assets/badges/rest-api.png" height="22" alt="REST API" /></td></tr>
 <tr><td align="center">Jooble (<code>ch</code>)</td><td>Free self-service REST API, key embedded in the URL path.</td></tr>
 <tr><td align="center">Adzuna (<code>ch</code>)</td><td>Free self-service REST API, authenticated with an <code>app_id</code>/<code>app_key</code> pair.</td></tr>
+<tr><td align="center">CERN</td><td>Official public SmartRecruiters postings API. One call returns the whole catalogue regardless of keyword, so it runs once per profile instead of once per keyword, and matching is left to <code>Filter by profile</code>.</td></tr>
+<tr><td align="center"><code>swissdevjobs.ch</code></td><td>Public JSON endpoint returning every Swiss tech posting in one call, also run once per profile. One of the few sources exposing salary ranges, kept in <code>raw_extra</code>.</td></tr>
 
 <tr><td colspan="2" align="right"><img src=".assets/badges/reverse-engineered.png" height="22" alt="Reverse-Engineered Endpoint" /></td></tr>
 <tr><td align="center">Job-Room</td><td>The documented SECO API only lets an employer manage its own listings; the public search runs on an undocumented, unauthenticated endpoint (<code>POST jobadservice/api/jobAdvertisements/_search</code>) found by inspecting the search page's network traffic. Canton filtering parameters were recovered by triggering 400 errors that leaked the server-side DTO field names.</td></tr>
 
 <tr><td colspan="2" align="right"><img src=".assets/badges/managed-actor.png" height="22" alt="Managed Actor" /></td></tr>
-<tr><td align="center">Indeed.ch</td><td>Indeed's Publisher API was retired in 2023 and the site blocks non-browser requests directly. Integrated through Apify's <code>misceres/indeed-scraper</code> actor instead, which handles rendering and anti-bot on Apify's side and returns plain JSON, at roughly $0.006 per result, capped per keyword to stay inside the free monthly credit.</td></tr>
+<tr><td align="center">Indeed.ch</td><td>Indeed's Publisher API was retired in 2023 and the site blocks non-browser requests directly. Integrated through Apify's <code>misceres/indeed-scraper</code> actor instead, which handles rendering and anti-bot on Apify's side and returns plain JSON, at roughly $0.006 per result, capped at 5 results per keyword to stay inside the free monthly credit. Queried with the profile's city: Indeed does not resolve a region name like "Suisse romande" and silently returns no results for it.</td></tr>
 </table>
 
 > [!WARNING]
-> **No source's own filtering can be trusted.** Search relevance and location filters vary from strict-enough to nearly absent across all six sources, so `Filter by profile` re-applies keyword-in-title and Suisse romande matching locally to every result, regardless of what each source claims to have already filtered.
+> **No source's own filtering can be trusted.** Search relevance and location filters vary from strict-enough to nearly absent across all nine sources, so `Filter by profile` re-applies keyword-in-title and Suisse romande matching locally to every result, regardless of what each source claims to have already filtered.
 
 <img src=".assets/divider.png" width="100%" alt="" />
 
@@ -152,7 +155,7 @@ A few of the constraints and trade-offs that only became visible once the pipeli
 > **A parameter collision silently swapped every translated title and description.** The DeepL translation node sent the title and the description as two body parameters both named `"text"`; n8n builds a form-urlencoded body from a key/value object, so the second entry overwrote the first and only the description ever reached DeepL. The stored `title` ended up as a translated description, something previously misdiagnosed as bad data from one specific source. Found by comparing raw source payloads against what n8n's own SQLite execution store had actually saved. Fixed by splitting the call into two sequential requests, each with a single unambiguous `text` parameter, and every affected row in `job_listings` was purged and repopulated rather than patched in place.
 
 > [!WARNING]
-> **One failed source fails the entire day's digest.** `Merge` combines all six source branches before anything downstream runs, so an unhandled error on any single source (a transient Adzuna 503, observed in production) fails the whole execution with no digest at all that day, rather than a partial one. A per-source `Continue On Fail` degrade-and-notify option was evaluated and explicitly not adopted, on the reasoning that a missing day beats a silently incomplete one.
+> **A failed source degrades the digest instead of cancelling it.** `Merge` combines all nine source branches before anything downstream runs. The first design let any unhandled error fail the whole execution, on the reasoning that a missing day beats a silently incomplete one. In production, a transient Adzuna 503 cost several days without any digest, so the decision was reversed: each search node retries 3 times, then its normalization node emits an error marker that an `If <Source> OK` node routes to an alert email, while the remaining sources continue into the digest. The trade-off is now an incomplete but explicitly flagged digest.
 
 > [!NOTE]
 > **Least-privilege database roles exist but do nothing yet.** Dedicated `n8n_app`/`metabase_app` roles were created, but the `postgres:16` image's default `pg_hba.conf` trusts every local connection unconditionally, so giving those roles passwords would have no real effect until that file is hardened too. The actual protection in production is that the Postgres port is never exposed beyond `127.0.0.1`, not the role boundary; treated as an accepted trade-off given the data (public job listings) carries no real sensitivity.
@@ -203,7 +206,7 @@ n8n's own workflow logic (Code nodes, graphical configuration) has no dedicated 
 
 ```bash
 # Unit tests: per-source normalization, scoring, language detection
-node --test tests/logic/
+node --test tests/logic/*.test.js
 
 # Integration tests against a real database (requires: docker compose up -d db)
 ./tests/db/test_schema.sh
