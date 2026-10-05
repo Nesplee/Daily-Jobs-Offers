@@ -597,11 +597,12 @@
           "id": "zIIUfintNuifHQcc",
           "name": "annonces db"
         }
-      }
+      },
+      "alwaysOutputData": true
     },
     {
       "parameters": {
-        "jsCode": "// Dédoublonnage inter-jours : jobs.ch réattribue parfois un nouvel\n// identifiant à une offre déjà republiée les jours précédents (source_id\n// instable), ce que la contrainte UNIQUE (source, source_id) ne peut pas\n// détecter puisque les identifiants diffèrent réellement. On compare donc\n// par (title, company) normalisés contre les 14 derniers jours.\nconst recent = $('Recent jobs.ch listings').all().map(i => i.json);\nconst seen = new Set(recent.map(r => (r.title || '') + '|' + (r.company || '')));\n\nconst incoming = $('Normalize jobs.ch').all();\nreturn incoming.filter(item => {\n  const key = String(item.json.title || '').trim().toLowerCase()\n    + '|' + String(item.json.company || '').trim().toLowerCase();\n  return !seen.has(key);\n});\n"
+        "jsCode": "// Dédoublonnage inter-jours : jobs.ch réattribue parfois un nouvel\n// identifiant à une offre déjà republiée les jours précédents (source_id\n// instable), ce que la contrainte UNIQUE (source, source_id) ne peut pas\n// détecter puisque les identifiants diffèrent réellement. On compare donc\n// par (title, company) normalisés contre les 14 derniers jours.\nconst recent = $('Recent jobs.ch listings').all().map(i => i.json).filter(r => r.title || r.company);\nconst seen = new Set(recent.map(r => (r.title || '') + '|' + (r.company || '')));\n\nconst incoming = $('Normalize jobs.ch').all();\nreturn incoming.filter(item => {\n  const key = String(item.json.title || '').trim().toLowerCase()\n    + '|' + String(item.json.company || '').trim().toLowerCase();\n  return !seen.has(key);\n});\n"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -701,11 +702,12 @@
           "id": "zIIUfintNuifHQcc",
           "name": "annonces db"
         }
-      }
+      },
+      "alwaysOutputData": true
     },
     {
       "parameters": {
-        "jsCode": "// Dédoublonnage inter-jours : même garde-fou que pour jobs.ch, par\n// précaution — jobup.ch partage l'infrastructure JobCloud avec jobs.ch et\n// pourrait avoir le même comportement de réattribution d'ID à la\n// republication d'une offre déjà vue les jours précédents.\nconst recent = $('Recent jobup.ch listings').all().map(i => i.json);\nconst seen = new Set(recent.map(r => (r.title || '') + '|' + (r.company || '')));\n\nconst incoming = $('Normalize jobup.ch').all();\nreturn incoming.filter(item => {\n  const key = String(item.json.title || '').trim().toLowerCase()\n    + '|' + String(item.json.company || '').trim().toLowerCase();\n  return !seen.has(key);\n});\n"
+        "jsCode": "// Dédoublonnage inter-jours : même garde-fou que pour jobs.ch, par\n// précaution — jobup.ch partage l'infrastructure JobCloud avec jobs.ch et\n// pourrait avoir le même comportement de réattribution d'ID à la\n// republication d'une offre déjà vue les jours précédents.\nconst recent = $('Recent jobup.ch listings').all().map(i => i.json).filter(r => r.title || r.company);\nconst seen = new Set(recent.map(r => (r.title || '') + '|' + (r.company || '')));\n\nconst incoming = $('Normalize jobup.ch').all();\nreturn incoming.filter(item => {\n  const key = String(item.json.title || '').trim().toLowerCase()\n    + '|' + String(item.json.company || '').trim().toLowerCase();\n  return !seen.has(key);\n});\n"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
