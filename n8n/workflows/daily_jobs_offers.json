@@ -276,7 +276,7 @@
     },
     {
       "parameters": {
-        "numberInputs": 8
+        "numberInputs": 9
       },
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3,
@@ -1121,6 +1121,72 @@
       ],
       "id": "82c5c1dc-b299-4e62-83ef-17ab96a78241",
       "name": "If LinkedIn OK"
+    },
+    {
+      "name": "swissdevjobs Search",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        1100
+      ],
+      "executeOnce": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "url": "https://swissdevjobs.ch/api/jobsLight",
+        "options": {}
+      },
+      "id": "b3e5ccbf-2546-4c70-ad36-1c86b491c1b3"
+    },
+    {
+      "name": "Normalize swissdevjobs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        620,
+        1100
+      ],
+      "parameters": {
+        "jsCode": "// swissdevjobs.ch expose toutes ses offres (toute la Suisse, toutes technos)\n// en un seul appel JSON non authentifié : GET https://swissdevjobs.ch/api/jobsLight.\n// Pas de recherche par mot-clé ni par lieu côté source : c'est \"Filter by\n// profile\" qui fait tout le tri, comme pour les autres sources.\n//\n// Un enregistrement brut ressemble à :\n//   { _id, name, company, actualCity, cityCategory, jobUrl, activeFrom,\n//     workplace, jobType, expLevel, annualSalaryFrom, annualSalaryTo,\n//     language, filterTags: [...] }\n// L'URL publique d'une offre est https://swissdevjobs.ch/jobs/<jobUrl>.\nfunction normalizeSwissDevJobsItem(raw) {\n  return {\n    source: 'swissdevjobs.ch',\n    source_id: raw._id,\n    title: raw.name,\n    company: raw.company || null,\n    url: 'https://swissdevjobs.ch/jobs/' + raw.jobUrl,\n    // actualCity est la ville réelle ; cityCategory est un regroupement\n    // (ex: \"Lausanne\" pour Renens), moins précis pour l'exclusion par lieu.\n    location: raw.actualCity || null,\n    // activeFrom est en heure locale suisse (\"2026-10-02T00:00:00.000+02:00\") :\n    // on garde la date telle quelle plutôt que de la convertir en UTC, ce qui\n    // la décalerait au jour précédent.\n    posted_at: raw.activeFrom ? raw.activeFrom.slice(0, 10) : null,\n    raw_extra: {\n      salary_min: raw.annualSalaryFrom || null,\n      salary_max: raw.annualSalaryTo || null,\n      workplace: raw.workplace || null,\n      job_type: raw.jobType || null,\n      exp_level: raw.expLevel || null,\n      language: raw.language || null,\n      tags: raw.filterTags || [],\n    },\n  };\n}\n\n// Endpoint JSON public : toutes les offres tech de Suisse en un appel (~220),\n// d'où executeOnce sur \"swissdevjobs Search\" (1 appel par profil). n8n éclate\n// le tableau JSON de la réponse en un item par offre ; un item d'erreur HTTP\n// (onError: continueRegularOutput) ou une offre sans _id = panne signalée.\nif (items.length === 0) return [];\nconst malformed = items.find(item => !item.json || item.json.error || !item.json._id);\nif (malformed) {\n  return [{ json: { __sourceError: true, source: 'swissdevjobs', message: 'réponse inattendue — ' + JSON.stringify(malformed.json).slice(0, 500) } }];\n}\nreturn items.map(item => ({ json: normalizeSwissDevJobsItem(item.json) }));\n"
+      },
+      "id": "1a9e226b-19cd-4e1d-9945-f34cc76cf92f"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "4cad0841-81c2-4268-83c3-2673648d31ed",
+              "leftValue": "={{ $json.__sourceError }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        820,
+        1100
+      ],
+      "id": "2a1c6b5b-532c-4bd9-b489-a5284311d8f9",
+      "name": "If swissdevjobs OK"
     }
   ],
   "pinData": {},
@@ -1205,6 +1271,11 @@
           },
           {
             "node": "LinkedIn Search",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "swissdevjobs Search",
             "type": "main",
             "index": 0
           }
@@ -1707,6 +1778,46 @@
             "node": "Merge",
             "type": "main",
             "index": 7
+          }
+        ]
+      ]
+    },
+    "swissdevjobs Search": {
+      "main": [
+        [
+          {
+            "node": "Normalize swissdevjobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize swissdevjobs": {
+      "main": [
+        [
+          {
+            "node": "If swissdevjobs OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If swissdevjobs OK": {
+      "main": [
+        [
+          {
+            "node": "Format Source Error",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 8
           }
         ]
       ]
