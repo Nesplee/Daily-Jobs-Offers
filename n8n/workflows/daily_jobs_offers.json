@@ -276,7 +276,7 @@
     },
     {
       "parameters": {
-        "numberInputs": 6
+        "numberInputs": 8
       },
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3,
@@ -941,6 +941,186 @@
           "name": "SMTP account"
         }
       }
+    },
+    {
+      "name": "CERN Search",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        780
+      ],
+      "executeOnce": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "url": "https://api.smartrecruiters.com/v1/companies/CERN/postings",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "limit",
+              "value": "=100"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "f63fbe4c-a6ff-4e9c-88da-228f5ab08dd2"
+    },
+    {
+      "name": "Normalize CERN",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        620,
+        780
+      ],
+      "parameters": {
+        "jsCode": "function normalizeCernPosting(raw) {\n  const location = raw.location || {};\n  return {\n    source: 'cern.ch',\n    source_id: raw.id,\n    title: raw.name,\n    company: raw.company ? raw.company.name : 'CERN',\n    url: 'https://jobs.smartrecruiters.com/CERN/' + raw.id,\n    location: [location.city, location.region].filter(Boolean).join(', ') || null,\n    posted_at: raw.releasedDate ? raw.releasedDate.slice(0, 10) : null,\n    raw_extra: {\n      ref_number: raw.refNumber || null,\n      department: raw.department ? raw.department.label : null,\n      function: raw.function ? raw.function.label : null,\n      contract_time: raw.typeOfEmployment ? raw.typeOfEmployment.label : null,\n      experience_level: raw.experienceLevel ? raw.experienceLevel.label : null,\n    },\n  };\n}\n\n    // API publique SmartRecruiters : toutes les offres du CERN en un appel (55 au\n    // 05.10.2026, limite 100), indépendamment du mot-clé — d'où executeOnce sur\n    // \"CERN Search\" (1 appel par profil au lieu d'1 par mot-clé). Le tri par\n    // mot-clé et par lieu est laissé à \"Filter by profile\", comme partout.\n    const input = items[0].json;\n    if (!input || !Array.isArray(input.content)) {\n      return [{ json: { __sourceError: true, source: 'CERN', message: 'réponse inattendue — ' + JSON.stringify(input).slice(0, 500) } }];\n    }\n    return input.content.map(raw => ({ json: normalizeCernPosting(raw) }));\n    "
+      },
+      "id": "b12cd12c-fea9-4d8c-a9de-bdfee87690da"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "3c3f5c8e-d6c4-4846-9665-1fff9958fe4c",
+              "leftValue": "={{ $json.__sourceError }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        820,
+        780
+      ],
+      "id": "abd09d3a-fab3-4532-bc2a-ef649e4a27c3",
+      "name": "If CERN OK"
+    },
+    {
+      "name": "LinkedIn Search",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        940
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "url": "https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "keywords",
+              "value": "={{ $json.keywords }}"
+            },
+            {
+              "name": "location",
+              "value": "={{ $json.locations[0] }}"
+            },
+            {
+              "name": "f_TPR",
+              "value": "=r604800"
+            },
+            {
+              "name": "start",
+              "value": "=0"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {}
+          },
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 2000
+            }
+          }
+        }
+      },
+      "id": "478b096a-03d3-4ccc-b510-bc5a5104188d"
+    },
+    {
+      "name": "Normalize LinkedIn",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        620,
+        940
+      ],
+      "parameters": {
+        "jsCode": "function decodeEntities(s) {\n  return String(s || '')\n    .replace(/&amp;/g, '&')\n    .replace(/&#39;/g, \"'\")\n    .replace(/&quot;/g, '\"')\n    .replace(/&lt;/g, '<')\n    .replace(/&gt;/g, '>')\n    .replace(/\\s+/g, ' ')\n    .trim();\n}\n\nfunction firstMatch(html, pattern) {\n  const m = html.match(pattern);\n  return m ? decodeEntities(m[1]) : null;\n}\n\n// L'endpoint invité renvoie une liste de <li> contenant chacun une carte\n// d'offre en HTML (pas de JSON). L'ID stable est dans data-entity-urn ; l'URL\n// de la carte porte des paramètres de tracking (refId, trackingId) qui changent\n// à chaque appel, donc on reconstruit une URL canonique à partir de l'ID.\nfunction parseLinkedinCards(html) {\n  return String(html || '')\n    .split('<li>')\n    .slice(1)\n    .map((card) => {\n      const id = firstMatch(card, /data-entity-urn=\"urn:li:jobPosting:(\\d+)\"/);\n      if (!id) return null;\n      return {\n        source: 'linkedin.com',\n        source_id: id,\n        title: firstMatch(card, /<h3 class=\"base-search-card__title\">([\\s\\S]*?)<\\/h3>/),\n        company: firstMatch(card, /<h4 class=\"base-search-card__subtitle\">[\\s\\S]*?<a[^>]*>([\\s\\S]*?)<\\/a>/),\n        url: 'https://www.linkedin.com/jobs/view/' + id,\n        location: firstMatch(card, /<span class=\"job-search-card__location\">([\\s\\S]*?)<\\/span>/),\n        posted_at: firstMatch(card, /datetime=\"(\\d{4}-\\d{2}-\\d{2})\"/),\n        raw_extra: {},\n      };\n    })\n    .filter((job) => job && job.title);\n}\n\n    // Endpoint invité (sans compte) : 10 cartes HTML par mot-clé, offres publiées\n    // dans les 7 derniers jours (f_TPR=r604800 — le pipeline ne tourne pas le\n    // week-end, une fenêtre de 24 h en perdrait). Un item par mot-clé en entrée.\n    // Une page sans carte = zéro résultat ; un item d'erreur HTTP (429, blocage,\n    // timeout via onError: continueRegularOutput) = panne signalée par email.\n    const failed = items.find(item => item.json && item.json.error);\n    if (failed) {\n      return [{ json: { __sourceError: true, source: 'LinkedIn', message: 'requête en échec — ' + JSON.stringify(failed.json.error).slice(0, 500) } }];\n    }\n    const seen = new Set();\n    return items\n      .flatMap(item => parseLinkedinCards(item.json.data))\n      .filter(job => !seen.has(job.source_id) && seen.add(job.source_id))\n      .map(job => ({ json: job }));\n    "
+      },
+      "id": "c5f1d7e2-69af-4da8-9092-9cb04fd5dcfd"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "8603e505-d3e3-4fcd-b28d-832062e6977d",
+              "leftValue": "={{ $json.__sourceError }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        820,
+        940
+      ],
+      "id": "82c5c1dc-b299-4e62-83ef-17ab96a78241",
+      "name": "If LinkedIn OK"
     }
   ],
   "pinData": {},
@@ -1015,6 +1195,16 @@
           },
           {
             "node": "Indeed Search",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "CERN Search",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "LinkedIn Search",
             "type": "main",
             "index": 0
           }
@@ -1437,6 +1627,86 @@
             "node": "Send Error Alert",
             "type": "main",
             "index": 0
+          }
+        ]
+      ]
+    },
+    "CERN Search": {
+      "main": [
+        [
+          {
+            "node": "Normalize CERN",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize CERN": {
+      "main": [
+        [
+          {
+            "node": "If CERN OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LinkedIn Search": {
+      "main": [
+        [
+          {
+            "node": "Normalize LinkedIn",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize LinkedIn": {
+      "main": [
+        [
+          {
+            "node": "If LinkedIn OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If CERN OK": {
+      "main": [
+        [
+          {
+            "node": "Format Source Error",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 6
+          }
+        ]
+      ]
+    },
+    "If LinkedIn OK": {
+      "main": [
+        [
+          {
+            "node": "Format Source Error",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 7
           }
         ]
       ]
