@@ -2,4 +2,3 @@
 docker/n8n/certs/
 tailscale-certs/
 n8n/workflows/backups/
-.claude/
