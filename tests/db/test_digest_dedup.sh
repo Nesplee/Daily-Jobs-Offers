@@ -25,13 +25,19 @@ INSERT INTO job_listings (source, source_id, title, company, url, match_score, c
   -- ...but the same title listed twice by one source the same day is one offer.
   ('test-digest-c', 'relist-1', 'Android Software Engineer', 'Plonkbank SA', 'https://example.com/8', 4, now(), NULL),
   ('test-digest-c', 'relist-2', 'Android Software Engineer', 'Plonkbank SA', 'https://example.com/9', 4, now(), NULL),
+  -- Same specific title already sent, now relayed with the portal as employer...
+  ('test-digest-d', 'portal-sent', 'Ingénieur logiciel backend (hébergement)', 'Wobblecloud', 'https://example.com/10', 4, now() - interval '1 day', now() - interval '1 day'),
+  ('test-digest-e', 'portal-relay', 'Ingénieur logiciel backend (hébergement)', 'Job-Room', 'https://example.com/11', 4, now(), NULL),
+  -- ...while a short generic title from an unknown employer is still sent.
+  ('test-digest-d', 'generic-sent', 'Software Engineer', 'Wobblecloud', 'https://example.com/12', 4, now() - interval '1 day', now() - interval '1 day'),
+  ('test-digest-e', 'generic-unknown', 'Software Engineer', NULL, 'https://example.com/13', 4, now(), NULL),
   -- A different internship at the already-notified employer.
   ('test-digest-a', 'other-internship', 'Stage - Ingénieur de données - Optimisation de la diffusion', 'Zorblax Odier', 'https://example.com/7', 5, now(), NULL);
 "
 
-selected=$($PSQL_EXEC -tA < n8n/sql/select_digest_offers.sql | cut -d'|' -f3 | grep -E '^(new-id|batch-lo|batch-hi|role-1|role-2|relist-[12]|other-internship)$' | sed 's/^relist-[12]$/relist/' | sort | tr '\n' ' ')
+selected=$($PSQL_EXEC -tA < n8n/sql/select_digest_offers.sql | cut -d'|' -f3 | grep -E '^(new-id|batch-lo|batch-hi|role-1|role-2|relist-[12]|portal-relay|generic-unknown|other-internship)$' | sed 's/^relist-[12]$/relist/' | sort | tr '\n' ' ')
 
-expected="batch-hi other-internship relist role-1 role-2 "
+expected="batch-hi generic-unknown other-internship relist role-1 role-2 "
 if [ "$selected" = "$expected" ]; then
   echo "PASS: digest skips already-sent and same-batch duplicates across sources, keeps distinct offers"
   result=0

@@ -17,8 +17,16 @@ WITH candidates AS (
   FROM candidates a
   JOIN candidates b
     ON b.id <> a.id
-   AND (b.d_company LIKE a.d_company || '%' OR a.d_company LIKE b.d_company || '%')
-   AND similarity(a.d_title, b.d_title) >= 0.7
+   AND (
+     ((b.d_company LIKE a.d_company || '%' OR a.d_company LIKE b.d_company || '%')
+      AND similarity(a.d_title, b.d_title) >= 0.7)
+     -- Employeur inconnu (Jooble sans entreprise) ou remplacé par le portail
+     -- (Adzuna met "Job-Room", Job-Room met "Jobup") : seul un intitulé
+     -- identique et assez spécifique compte, pas "Software Engineer" seul.
+     OR (a.d_title = b.d_title AND length(a.d_title) >= 20
+         AND (a.d_company IS NULL OR b.d_company IS NULL
+              OR a.d_company IN ('jobroom', 'jobup') OR b.d_company IN ('jobroom', 'jobup')))
+   )
    -- Une source qui publie le même jour deux annonces aux intitulés proches
    -- mais différents publie deux postes distincts (ex. Pictet "Ingénieur
    -- DevOps" et "Ingénieur DevOps IAM" sur jobs.ch). Un intitulé identique
