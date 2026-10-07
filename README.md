@@ -46,7 +46,7 @@ This isn't a scraper that just fetches and stores. A handful of decisions separa
 
 - **Every source is filtered twice, and only the pipeline's own filter is trusted.** Job boards claim keyword and location relevance but deliver noise: a "devops" search on Job-Room returns "Business Analyst," an Indeed "Suisse romande" search returns Zurich. A single shared `Filter by profile` node re-checks every result against the title (not just the description) and hard-excludes non-Romandie locations, applied uniformly across all nine sources regardless of what each one claims to have already filtered.
 - **Silent data loss is the failure mode that matters.** Adzuna and Jooble's normalization nodes once logged unexpected API shapes and returned an empty array, which hid a set of expired API keys for weeks. Later, four source nodes turned out to read only the first keyword's response and discard the rest, and Indeed returned nothing for a week because it did not recognize the requested location. None of these raised an error. Every source now emits an explicit error marker that triggers an alert email without stopping the other sources, and each fix was confirmed against live responses rather than assumed.
-- **Every allocation of state (a run, a translation call, an email send) fails without losing data.** A failed translation call falls back to the untranslated field instead of dropping the job. A failed email send leaves rows with `notified_at IS NULL` so they retry on the next run instead of vanishing. Deduplication survives a source reassigning IDs to republished listings, via an application-level `(title, company)` filter over the trailing 14 days that the database's `UNIQUE` constraint alone can't catch.
+- **Every allocation of state (a run, a translation call, an email send) fails without losing data.** A failed translation call falls back to the untranslated field instead of dropping the job. A failed email send leaves rows with `notified_at IS NULL` so they retry on the next run instead of vanishing. Deduplication survives what the database's `UNIQUE` constraint alone can't catch: the same listing arriving from several sources, or from an aggregator that assigns it a new ID on every crawl. The digest query compares a normalized employer and a trigram-similar title against everything already sent, so a listing goes out once whatever its source or spelling.
 - **Secrets and deployment followed the same discipline as the code.** All third-party keys moved out of exported n8n workflow JSON into container environment variables read via `{{ $env.VAR }}` expressions, and the production host went from a hand-maintained file copy to a real `git clone` behind a deploy key scoped to read-only access on this one repository.
 
 <img src=".assets/divider.png" width="100%" alt="" />
@@ -119,7 +119,7 @@ This isn't a scraper that just fetches and stores. A handful of decisions separa
 Two tables carry the whole pipeline (see [`migrations/`](migrations) for the full history):
 
 - **`search_profiles`** holds the search configuration (name, keywords, locations, minimum salary, active flag), edited manually in the database. Migrations create the schema, never the data.
-- **`job_listings`** holds the collected listings, deduplicated by `UNIQUE(source, source_id)` through an `ON CONFLICT` upsert. Key columns: `match_score`/`match_category` (the primary/secondary scoring tier), `is_read`/`is_favorite` (manual marking, both exempt from cleanup), `notified_at` (tracked separately from `created_at` so a listing re-upserted on a later day is not silently skipped by the digest), and `raw_extra` (a JSONB field holding whatever each source exposes beyond the shared columns, with no fixed schema between sources).
+- **`job_listings`** holds the collected listings, deduplicated by `UNIQUE(source, source_id)` through an `ON CONFLICT` upsert, then across sources at digest time by the `dedup_company`/`dedup_title` functions ([`n8n/sql/select_digest_offers.sql`](n8n/sql/select_digest_offers.sql)). Key columns: `match_score`/`match_category` (the primary/secondary scoring tier), `is_read`/`is_favorite` (manual marking, both exempt from cleanup), `notified_at` (tracked separately from `created_at` so a listing re-upserted on a later day is not silently skipped by the digest), and `raw_extra` (a JSONB field holding whatever each source exposes beyond the shared columns, with no fixed schema between sources).
 
 > [!NOTE]
 > **`notified_at` is not `created_at`.** A listing already in the database gets its `created_at` preserved across every re-upsert, so filtering the digest by "created today" quietly drops any listing whose first send attempt failed. `notified_at` is set only after a confirmed send, which is what actually decides whether a listing is still eligible for the next digest.
@@ -213,6 +213,7 @@ node --test tests/logic/*.test.js
 ./tests/db/test_dedupe_constraint.sh
 ./tests/db/test_ttl_query.sh
 ./tests/db/test_upsert_query.sh
+./tests/db/test_digest_dedup.sh
 ./tests/db/test_role_privileges.sh
 ```
 
