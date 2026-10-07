@@ -44,7 +44,7 @@ The interesting part isn't wiring nine HTTP calls together. It's that every sour
 
 This isn't a scraper that just fetches and stores. A handful of decisions separate a script that runs once from a pipeline that runs unattended, every day, without anyone checking the output first:
 
-- **Every source is filtered twice, and only the pipeline's own filter is trusted.** Job boards claim keyword and location relevance but deliver noise: a "devops" search on Job-Room returns "Business Analyst," an Indeed "Suisse romande" search returns Zurich. A single shared `Filter by profile` node re-checks every result against the title (not just the description) and hard-excludes non-Romandie locations, applied uniformly across all nine sources regardless of what each one claims to have already filtered.
+- **Every source is filtered twice, and only the pipeline's own filter is trusted.** Job boards claim keyword and location relevance but deliver noise: a "devops" search on Job-Room returns "Business Analyst," an Indeed "Suisse romande" search returns Zurich. A single shared `Filter by profile` node ([`n8n/logic/job_targeting.js`](n8n/logic/job_targeting.js)) re-checks every result: the title must name one of the profile's roles, senior titles and listings asking for more than three years of experience are dropped, and the location must be on a Suisse romande whitelist (a blacklist of German-speaking towns was never complete). Sources are searched by role without "junior", because most postings open to juniors never say so; seniority is decided locally instead.
 - **Silent data loss is the failure mode that matters.** Adzuna and Jooble's normalization nodes once logged unexpected API shapes and returned an empty array, which hid a set of expired API keys for weeks. Later, four source nodes turned out to read only the first keyword's response and discard the rest, and Indeed returned nothing for a week because it did not recognize the requested location. None of these raised an error. Every source now emits an explicit error marker that triggers an alert email without stopping the other sources, and each fix was confirmed against live responses rather than assumed.
 - **Every allocation of state (a run, a translation call, an email send) fails without losing data.** A failed translation call falls back to the untranslated field instead of dropping the job. A failed email send leaves rows with `notified_at IS NULL` so they retry on the next run instead of vanishing. Deduplication survives what the database's `UNIQUE` constraint alone can't catch: the same listing arriving from several sources, or from an aggregator that assigns it a new ID on every crawl. The digest query compares a normalized employer and a trigram-similar title against everything already sent, so a listing goes out once whatever its source or spelling.
 - **Secrets and deployment followed the same discipline as the code.** All third-party keys moved out of exported n8n workflow JSON into container environment variables read via `{{ $env.VAR }}` expressions, and the production host went from a hand-maintained file copy to a real `git clone` behind a deploy key scoped to read-only access on this one repository.
@@ -57,12 +57,14 @@ This isn't a scraper that just fetches and stores. A handful of decisions separa
 ```text
 [n8n cron, 8:00, Monday to Friday]
     -> for each active search_profile
-    -> for each keyword in the profile
-        -> query the 9 sources in parallel
+    -> for each keyword in the profile (searched without "junior")
+        -> query the 9 sources in parallel, once per Romandie city
+           for sources that filter by location
     -> raw extraction (shared fields + source-specific raw_extra)
-    -> local filtering (keyword in title, Suisse romande location)
+    -> local filtering (target role in title, seniority, Suisse romande location)
     -> language detection + DeepL translation to French if needed
-    -> scoring (primary / secondary) and upsert into job_listings
+    -> scoring (primary = junior/internship, secondary = seniority unspecified)
+       and upsert into job_listings
     -> TTL cleanup (unread, non-favorited listings older than 20 days)
     -> HTML email digest of listings never notified before
 ```
