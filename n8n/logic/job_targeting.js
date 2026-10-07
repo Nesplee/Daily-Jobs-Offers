@@ -19,7 +19,10 @@ const ROLE_PATTERNS = {
   ],
   'software engineer': [
     /\bsoftware (engineer|developer|entwickler)/i,
-    /\bing[ée]nieur(e|\(e\)|·e)? (en |de )?(logiciel|software|d[ée]veloppement)/i,
+    /\bing[ée]nieur(e|\(e\)|·e)? (en |de )?(logiciel|software)/i,
+    // "Ingénieur développement" seul couvre aussi la mécanique ("Développement Moteur").
+    /\bing[ée]nieur(e|\(e\)|·e)? (en |de )?d[ée]veloppement (logiciel|software|web|full.?stack|back.?end|front.?end|ia|ai|informatique|applicatif)/i,
+    /\bfull.?stack\b/i,
     /\bd[ée]veloppeur(se|\(se\)|·se)?\b/i,
     /\b(full.?stack|back.?end|front.?end|web|python|java|\.net|c\+\+) (engineer|developer)\b/i,
     /\bdeveloper\b/i,

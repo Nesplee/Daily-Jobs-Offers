@@ -19,12 +19,14 @@ WITH candidates AS (
     ON b.id <> a.id
    AND (b.d_company LIKE a.d_company || '%' OR a.d_company LIKE b.d_company || '%')
    AND similarity(a.d_title, b.d_title) >= 0.7
-   -- Une source qui publie deux annonces proches le même jour publie deux
-   -- postes distincts (ex. Pictet "Ingénieur DevOps" et "Ingénieur DevOps
-   -- IAM" sur jobs.ch). Jooble est exclu : il agrège plusieurs flux et
-   -- liste réellement la même offre plusieurs fois dans un même crawl.
+   -- Une source qui publie le même jour deux annonces aux intitulés proches
+   -- mais différents publie deux postes distincts (ex. Pictet "Ingénieur
+   -- DevOps" et "Ingénieur DevOps IAM" sur jobs.ch). Un intitulé identique
+   -- reste un doublon (Job-Room liste la même offre Swissquote 4 fois).
+   -- Jooble est exclu : il agrège plusieurs flux et reformule les titres.
    AND NOT (a.source = b.source AND a.source <> 'jooble.ch'
-            AND a.created_at::date = b.created_at::date)
+            AND a.created_at::date = b.created_at::date
+            AND a.d_title <> b.d_title)
   WHERE a.notified_at IS NULL
 )
 SELECT c.id, c.source, c.source_id, c.title, c.company, c.url, c.location,

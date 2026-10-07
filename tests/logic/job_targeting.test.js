@@ -24,6 +24,7 @@ test('recognizes the three target roles in English, French and German titles', (
   assert.deepEqual(matchedRoles('Développeur·euse Python', profile), ['junior software engineer']);
   assert.deepEqual(matchedRoles('Junior Softwareentwickler (m/w/d)', profile), ['junior software engineer']);
   assert.deepEqual(matchedRoles('Ingénieur DevOps/Ingénieure DevOps', profile), ['junior devops engineer']);
+  assert.deepEqual(matchedRoles('Ingénieur·e développement Fullstack', profile), ['junior software engineer']);
   assert.deepEqual(
     matchedRoles('Software Engineer - (Core DevOps)', profile),
     ['junior software engineer', 'junior devops engineer'],
@@ -31,7 +32,7 @@ test('recognizes the three target roles in English, French and German titles', (
 });
 
 test('rejects roles outside the three targets, including sales "developer" titles', () => {
-  for (const title of ['Data Analyst', 'Data Scientist', 'Chef de projet IT', 'Business Developer', 'Développeur commercial']) {
+  for (const title of ['Data Analyst', 'Data Scientist', 'Chef de projet IT', 'Business Developer', 'Développeur commercial', 'Ingénieur Développement Moteur / Automobile']) {
     assert.deepEqual(matchedRoles(title, profile), [], title);
   }
 });
