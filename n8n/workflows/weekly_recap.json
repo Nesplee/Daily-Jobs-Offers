@@ -28,7 +28,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": " SELECT * FROM job_listings\n  WHERE created_at >= date_trunc('week', now())\n    AND created_at < date_trunc('week', now()) + interval '6 days'\n  ORDER BY match_category, match_score DESC;\n",
+        "query": " -- Récap de ce qui a réellement été envoyé dans la semaine (notified_at),\n  -- pas de tout ce qui a été collecté : filtrer sur created_at ressortait\n  -- aussi les doublons que le digest quotidien avait écartés.\n  SELECT * FROM job_listings\n  WHERE notified_at >= date_trunc('week', now())\n    AND notified_at < date_trunc('week', now()) + interval '6 days'\n  ORDER BY match_category, match_score DESC;\n",
         "options": {}
       },
       "type": "n8n-nodes-base.postgres",

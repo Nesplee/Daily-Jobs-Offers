@@ -148,7 +148,7 @@
     },
     {
       "parameters": {
-        "jsCode": "function normalizeAdzunaItem(raw) {\n    return {\n      source: 'adzuna.ch',\n      source_id: raw.id,\n      title: raw.title,\n      company: raw.company ? raw.company.display_name : null,\n      url: raw.redirect_url,\n      location: raw.location ? raw.location.display_name : null,\n      posted_at: raw.created ? raw.created.slice(0, 10) : null,\n      raw_extra: {\n        description_snippet: raw.description || null,\n        salary_min: raw.salary_min || null,\n        salary_max: raw.salary_max || null,\n        contract_type: raw.contract_type || null,\n        contract_time: raw.contract_time || null,\n        category: raw.category ? raw.category.label : null,\n        description_full: raw.fullDescription || null,\n      },\n    };\n  }\n\n  // Un item par mot-clé du profil (Split Out en amont) : chaque item est la\n      // réponse Adzuna d'UN mot-clé. Ne lire que items[0] ignorait silencieusement\n      // tous les mots-clés sauf le premier.\n      return items.flatMap(item => {\n        const input = item.json;\n        if (!input || !Array.isArray(input.results)) {\n          // Échec isolé à cette seule source (pas de throw) : les autres sources\n          // et le digest ne doivent pas être bloqués par une panne Adzuna. Le node\n          // \"If Adzuna OK\" juste après route ce marqueur vers une alerte par email.\n          return [{ json: { __sourceError: true, source: 'Adzuna', message: 'réponse inattendue — ' + JSON.stringify(input).slice(0, 500) } }];\n        }\n        return input.results.map(raw => ({ json: normalizeAdzunaItem(raw) }));\n      });\n    "
+        "jsCode": "function normalizeAdzunaItem(raw) {\n    return {\n      source: 'adzuna.ch',\n      source_id: raw.id,\n      title: raw.title,\n      company: raw.company ? raw.company.display_name : null,\n      url: raw.redirect_url,\n      location: raw.location ? raw.location.display_name : null,\n      posted_at: raw.created ? raw.created.slice(0, 10) : null,\n      raw_extra: {\n        description_snippet: raw.description || null,\n        salary_min: raw.salary_min || null,\n        salary_max: raw.salary_max || null,\n        contract_type: raw.contract_type || null,\n        contract_time: raw.contract_time || null,\n        category: raw.category ? raw.category.label : null,\n        description_full: raw.fullDescription || null,\n      },\n    };\n  }\n\n  // Un item par mot-clé du profil (Split Out en amont) : chaque item est la\n      // réponse Adzuna d'UN mot-clé. Ne lire que items[0] ignorait silencieusement\n      // tous les mots-clés sauf le premier.\n      const isValid = item => item.json && Array.isArray(item.json.results);\n      const failed = items.filter(item => !isValid(item));\n      const jobs = items.filter(isValid)\n        .flatMap(item => item.json.results.map(raw => ({ json: normalizeAdzunaItem(raw) })));\n      if (failed.length > 0) {\n        // Échec isolé à cette seule source (pas de throw) : les autres sources\n        // et le digest ne doivent pas être bloqués. UN seul marqueur pour toutes\n        // les requêtes échouées (une par mot-clé et par ville), avec le décompte :\n        // un marqueur par requête donnait une alerte de 14 lignes identiques.\n        // \"Format Source Error\" le résume, \"Filter by profile\" l'écarte des offres.\n        jobs.push({ json: { __sourceError: true, source: 'Adzuna', failed: failed.length, total: items.length,\n          message: 'réponse inattendue — ' + JSON.stringify(failed[0].json).slice(0, 500) } });\n      }\n      return jobs;\n    "
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -161,7 +161,7 @@
     },
     {
       "parameters": {
-        "jsCode": "function normalizeJoobleItem(raw) {\n    return {\n      source: 'jooble.ch',\n      source_id: raw.id,\n      title: raw.title,\n      company: raw.company || null,\n      url: raw.link,\n      location: raw.location || null,\n      posted_at: raw.updated ? raw.updated.slice(0, 10) : null,\n      raw_extra: {\n        description_snippet: raw.snippet || null,\n        salary: raw.salary || null,\n        type: raw.type || null,\n        source_name: raw.source || null,\n        description_full: raw.fullDescription || null,\n      },\n    };\n  }\n\n  // Un item par mot-clé — voir le commentaire équivalent dans \"Normalize Adzuna\".\n      return items.flatMap(item => {\n        const input = item.json;\n        if (!input || !Array.isArray(input.jobs)) {\n          return [{ json: { __sourceError: true, source: 'Jooble', message: 'réponse inattendue — ' + JSON.stringify(input).slice(0, 500) } }];\n        }\n        return input.jobs.map(raw => ({ json: normalizeJoobleItem(raw) }));\n      });\n    "
+        "jsCode": "function normalizeJoobleItem(raw) {\n    return {\n      source: 'jooble.ch',\n      source_id: raw.id,\n      title: raw.title,\n      company: raw.company || null,\n      url: raw.link,\n      location: raw.location || null,\n      posted_at: raw.updated ? raw.updated.slice(0, 10) : null,\n      raw_extra: {\n        description_snippet: raw.snippet || null,\n        salary: raw.salary || null,\n        type: raw.type || null,\n        source_name: raw.source || null,\n        description_full: raw.fullDescription || null,\n      },\n    };\n  }\n\n  // Un item par mot-clé — voir le commentaire équivalent dans \"Normalize Adzuna\".\n      const isValid = item => item.json && Array.isArray(item.json.jobs);\n      const failed = items.filter(item => !isValid(item));\n      const jobs = items.filter(isValid)\n        .flatMap(item => item.json.jobs.map(raw => ({ json: normalizeJoobleItem(raw) })));\n      if (failed.length > 0) {\n        // Échec isolé à cette seule source (pas de throw) : les autres sources\n        // et le digest ne doivent pas être bloqués. UN seul marqueur pour toutes\n        // les requêtes échouées (une par mot-clé et par ville), avec le décompte :\n        // un marqueur par requête donnait une alerte de 14 lignes identiques.\n        // \"Format Source Error\" le résume, \"Filter by profile\" l'écarte des offres.\n        jobs.push({ json: { __sourceError: true, source: 'Jooble', failed: failed.length, total: items.length,\n          message: 'réponse inattendue — ' + JSON.stringify(failed[0].json).slice(0, 500) } });\n      }\n      return jobs;\n    "
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -306,7 +306,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const FRENCH_WORDS = ['et', 'le', 'la', 'les', 'des', 'pour', 'avec', 'notre', 'nos', 'vous', 'êtes',\n  'nous', 'recherchons', 'poste', 'équipe', 'expérience', 'compétences'];\n  const GERMAN_WORDS = ['und', 'der', 'die', 'das', 'mit', 'für', 'sind', 'werden', 'sie', 'ihre',\n  'unsere', 'kenntnisse', 'erfahrung', 'aufgaben', 'wir', 'suchen', 'stelle', 'unternehmen'];\n  const ITALIAN_WORDS = ['e', 'il', 'la', 'di', 'per', 'con', 'sono', 'nostra', 'nostro', 'esperienza',\n  'competenze', 'cerchiamo', 'azienda', 'lavoro'];\n  const ENGLISH_WORDS = ['the', 'and', 'you', 'our', 'for', 'with', 'are', 'will', 'team', 'looking',\n  'join', 'experience', 'skills', 'role', 'we'];\n\n  function buildMarker(words) {\n    return new RegExp('\\\\b(' + words.join('|') + ')\\\\b', 'gi');\n  }\n\n  const FRENCH_MARKERS = buildMarker(FRENCH_WORDS);\n  const GERMAN_MARKERS = buildMarker(GERMAN_WORDS);\n  const ITALIAN_MARKERS = buildMarker(ITALIAN_WORDS);\n  const ENGLISH_MARKERS = buildMarker(ENGLISH_WORDS);\n\n  function searchableText(listing) {\n    return [\n      listing.title || '',\n      listing.raw_extra && (listing.raw_extra.description || listing.raw_extra.description_snippet ||\n  listing.raw_extra.description_full) || '',\n    ].join(' ').toLowerCase();\n  }\n\n\n  function detectForeignLanguage(listing) {\n    const text = searchableText(listing);\n    const counts = {\n      fr: (text.match(FRENCH_MARKERS) || []).length,\n      de: (text.match(GERMAN_MARKERS) || []).length,\n      it: (text.match(ITALIAN_MARKERS) || []).length,\n      en: (text.match(ENGLISH_MARKERS) || []).length,\n    };\n\n    const nonFrenchMax = Math.max(counts.de, counts.it, counts.en);\n\n    if (counts.fr >= 2 && counts.fr >= nonFrenchMax) return null;\n    if (nonFrenchMax < 2) return null;\n\n    if (counts.de === nonFrenchMax) return 'de';\n    if (counts.it === nonFrenchMax) return 'it';\n    return 'en';\n  }\n\n    // --- Copie de n8n/logic/job_targeting.js (testé dans tests/logic/job_targeting.test.js) ---\n// Ciblage du profil : uniquement les trois métiers visés (data, software,\n// devops), uniquement en Suisse romande, et sans les postes seniors.\n// Les sources sont interrogées par métier SANS \"junior\" (jobs.ch, Genève :\n// 66 offres \"data engineer\" contre 2 pour \"junior data engineer\" — la\n// plupart des postes accessibles à un junior ne portent pas la mention), la\n// séniorité est donc tranchée ici, localement.\n\nconst ROLE_PATTERNS = {\n  'data engineer': [\n    /\\b(big )?data engineer/i,\n    /\\bdata engineering\\b/i,\n    /\\banalytics engineer/i,\n    /\\bing[ée]nieur(e|\\(e\\)|·e)?s? (de |en |des )?donn[ée]es\\b/i,\n    /\\bing[ée]nieur(e|\\(e\\)|·e)? (big )?data\\b/i,\n    /\\bd[ée]veloppeur(se|\\(se\\)|·se)? (data|etl|big data)\\b/i,\n    /\\bdata ?ingenieur/i,\n    /\\bdateningenieur/i,\n    /\\betl developer/i,\n  ],\n  'software engineer': [\n    /\\bsoftware (engineer|developer|entwickler)/i,\n    /\\bing[ée]nieur(e|\\(e\\)|·e)? (en |de )?(logiciel|software)/i,\n    // \"Ingénieur développement\" seul couvre aussi la mécanique (\"Développement Moteur\").\n    /\\bing[ée]nieur(e|\\(e\\)|·e)? (en |de )?d[ée]veloppement (logiciel|software|web|full.?stack|back.?end|front.?end|ia|ai|informatique|applicatif)/i,\n    /\\bfull.?stack\\b/i,\n    /\\bd[ée]veloppeur(se|\\(se\\)|·se)?\\b/i,\n    /\\b(full.?stack|back.?end|front.?end|web|python|java|\\.net|c\\+\\+) (engineer|developer)\\b/i,\n    /\\bdeveloper\\b/i,\n    /\\bsoftwareentwickler/i,\n    /\\bprogrammeur/i,\n  ],\n  'devops engineer': [\n    /\\bdev ?ops\\b/i,\n    /\\bdev ?sec ?ops\\b/i,\n    /\\bsite reliability\\b/i,\n    /\\bsre\\b/i,\n    /\\bplatform engineer/i,\n    /\\bcloud engineer/i,\n    /\\bing[ée]nieur(e|\\(e\\)|·e)? (cloud|plateforme)\\b/i,\n  ],\n};\n\n// \"Business Developer\" et \"Développeur commercial\" contiennent \"developer\"\n// mais sont des postes de vente.\nconst NOT_A_TECH_ROLE = /\\b(business develop|d[ée]veloppeu(r|se) (commercial|d'affaires|business)|d[ée]veloppement (commercial|des affaires)|sales)/i;\n\nconst SENIOR_TITLE = /\\b(senior|sr\\.?|lead|principal|staff|head|chief|manager|director|directeur|directrice|architect|architecte|expert|experte|confirm[ée]e?|exp[ée]riment[ée]e?|chef|cheffe|responsable|vp|leiter|leiterin)\\b/i;\n\nconst JUNIOR_TITLE = /\\b(junior|jr\\.?|graduate|entry.level|d[ée]butant(e)?|stage|stagiaire|intern|internship|trainee|apprenti(e)?|apprentissage|alternance|alternant(e)?|working student|werkstudent(in)?|praktikum|praktikant(in)?|jeune dipl[ôo]m[ée](e)?|new grad)\\b/i;\nconst JUNIOR_TEXT = /\\b(junior|graduate|entry.level|d[ée]butant(e)?|jeune dipl[ôo]m[ée](e)?|new grad|premi[èe]re exp[ée]rience)\\b/i;\n\n// \"5+ years of experience\", \"au moins 4 ans d'expérience\", \"5 Jahre Erfahrung\".\nconst YEARS_OF_EXPERIENCE = /(\\d{1,2})\\s*\\+?\\s*(?:-\\s*\\d{1,2}\\s*)?(?:ans|ann[ée]es|years?|yrs|jahre)\\b[^.\\n]{0,40}?(exp[ée]rience|experience|erfahrung)/gi;\nconst MAX_JUNIOR_YEARS = 3;\n\nfunction profileRole(keyword) {\n  return String(keyword || '').toLowerCase().replace(/^\\s*junior\\s+/, '').trim();\n}\n\nfunction matchedRoles(title, profile) {\n  const text = String(title || '');\n  if (NOT_A_TECH_ROLE.test(text)) return [];\n  return profile.keywords.filter((kw) => {\n    const role = profileRole(kw);\n    const patterns = ROLE_PATTERNS[role];\n    return patterns ? patterns.some((re) => re.test(text)) : text.toLowerCase().includes(role);\n  });\n}\n\nfunction requiredYears(text) {\n  let max = 0;\n  for (const m of String(text || '').matchAll(YEARS_OF_EXPERIENCE)) {\n    max = Math.max(max, Number(m[1]));\n  }\n  return max;\n}\n\n// 'junior' : la mention est explicite. 'unspecified' : aucune indication.\n// 'senior' : titre senior/lead/architecte..., ou plus de MAX_JUNIOR_YEARS ans\n// d'expérience demandés sans mention junior dans le titre.\nfunction seniority(title, description) {\n  const juniorTitle = JUNIOR_TITLE.test(title || '');\n  if (!juniorTitle && SENIOR_TITLE.test(title || '')) return 'senior';\n  if (juniorTitle) return 'junior';\n  if (requiredYears(description) > MAX_JUNIOR_YEARS) return 'senior';\n  if (JUNIOR_TEXT.test(description || '')) return 'junior';\n  return 'unspecified';\n}\n\n// Liste blanche plutôt que liste noire : une liste des localités hors\n// Romandie n'est jamais complète (Schlieren, Sursee passaient). Une offre\n// est gardée si sa localisation cite un canton romand ou une ville du\n// profil, ou si elle ne précise rien de plus que le pays (bénéfice du doute).\nconst ROMAND_CANTONS = /\\b(ge|vd|ne|fr|vs|ju|gen[èe]ve|geneva|genf|vaud|waadt|neuch[âa]tel|neuenburg|fribourg|freiburg|valais|wallis|jura)\\b/i;\n// Le Haut-Valais est germanophone, même s'il est en \"VS\"/\"Wallis\".\nconst UPPER_VALAIS = /\\b(brig|brigue|visp|vi[èe]ge|zermatt|naters|leuk|loèche)\\b/i;\nconst COUNTRY_ONLY = /\\b(switzerland|suisse|schweiz|svizzera|ch|remote|t[ée]l[ée]travail|hybrid|hybride|kanton|canton)\\b/gi;\n\nconst LOCATION_ALIASES = {\n  'genève': ['genève', 'geneve', 'geneva', 'genf', 'ginevra'],\n  'lausanne': ['lausanne', 'losanna'],\n  'neuchâtel': ['neuchâtel', 'neuchatel', 'neuenburg'],\n  'fribourg': ['fribourg', 'freiburg'],\n  'sion': ['sion', 'sitten'],\n  'delémont': ['delémont', 'delemont', 'delsberg'],\n};\n\nfunction locationMatches(location, profile) {\n  const text = String(location || '').toLowerCase();\n  if (!text) return false;\n  return profile.locations.some((loc) => {\n    const locLower = loc.toLowerCase();\n    return (LOCATION_ALIASES[locLower] || [locLower]).some((alias) => text.includes(alias));\n  });\n}\n\nfunction isRomandieLocation(location, profile) {\n  const text = String(location || '');\n  if (!text.trim()) return true;\n  if (UPPER_VALAIS.test(text)) return false;\n  if (ROMAND_CANTONS.test(text) || locationMatches(text, profile)) return true;\n  return text.replace(COUNTRY_ONLY, '').replace(/[^\\p{L}]/gu, '') === '';\n}\n\n// matchCategory : 'primary' (métier visé + mention junior/stage),\n// 'secondary' (métier visé, séniorité non précisée), 'excluded' sinon.\nfunction classifyListing(listing, profile) {\n  const title = listing.title || '';\n  const extra = listing.raw_extra || {};\n  const description = [extra.description, extra.description_snippet, extra.description_full]\n    .filter((v) => typeof v === 'string').join(' ');\n\n  const roles = matchedRoles(title, profile);\n  const level = seniority(title, description);\n  const inRomandie = isRomandieLocation(listing.location, profile);\n\n  let matchCategory = 'excluded';\n  if (roles.length > 0 && level !== 'senior' && inRomandie) {\n    matchCategory = level === 'junior' ? 'primary' : 'secondary';\n  }\n\n  const matchScore = roles.length * 3\n    + (level === 'junior' ? 2 : 0)\n    + (locationMatches(listing.location, profile) ? 1 : 0);\n\n  return { matchCategory, matchScore, keywordsMatched: roles, seniority: level };\n}\n\n  const profile = $('Loop Over Items').first().json;\n\n  // Une même offre remonte pour plusieurs villes de recherche (Genève et\n  // Lausanne couvrent Nyon) : on ne la garde qu'une fois par source.\n  const seen = new Set();\n  return items\n    .map(item => {\n      const target = classifyListing(item.json, profile);\n      return {\n        json: {\n          ...item.json,\n          matchScore: target.matchScore,\n          matchCategory: target.matchCategory,\n          foreignLanguage: detectForeignLanguage(item.json),\n          locationIncomplete: !item.json.location,\n          keywordsMatched: target.keywordsMatched,\n          searchProfileId: profile.id,\n        },\n      };\n    })\n    .filter(item => item.json.matchCategory !== 'excluded')\n    .filter(item => {\n      const key = item.json.source + '|' + item.json.source_id;\n      if (seen.has(key)) return false;\n      seen.add(key);\n      return true;\n    })\n    .sort((a, b) => b.json.matchScore - a.json.matchScore);\n"
+        "jsCode": "const FRENCH_WORDS = ['et', 'le', 'la', 'les', 'des', 'pour', 'avec', 'notre', 'nos', 'vous', 'êtes',\n  'nous', 'recherchons', 'poste', 'équipe', 'expérience', 'compétences'];\n  const GERMAN_WORDS = ['und', 'der', 'die', 'das', 'mit', 'für', 'sind', 'werden', 'sie', 'ihre',\n  'unsere', 'kenntnisse', 'erfahrung', 'aufgaben', 'wir', 'suchen', 'stelle', 'unternehmen'];\n  const ITALIAN_WORDS = ['e', 'il', 'la', 'di', 'per', 'con', 'sono', 'nostra', 'nostro', 'esperienza',\n  'competenze', 'cerchiamo', 'azienda', 'lavoro'];\n  const ENGLISH_WORDS = ['the', 'and', 'you', 'our', 'for', 'with', 'are', 'will', 'team', 'looking',\n  'join', 'experience', 'skills', 'role', 'we'];\n\n  function buildMarker(words) {\n    return new RegExp('\\\\b(' + words.join('|') + ')\\\\b', 'gi');\n  }\n\n  const FRENCH_MARKERS = buildMarker(FRENCH_WORDS);\n  const GERMAN_MARKERS = buildMarker(GERMAN_WORDS);\n  const ITALIAN_MARKERS = buildMarker(ITALIAN_WORDS);\n  const ENGLISH_MARKERS = buildMarker(ENGLISH_WORDS);\n\n  function searchableText(listing) {\n    return [\n      listing.title || '',\n      listing.raw_extra && (listing.raw_extra.description || listing.raw_extra.description_snippet ||\n  listing.raw_extra.description_full) || '',\n    ].join(' ').toLowerCase();\n  }\n\n\n  function detectForeignLanguage(listing) {\n    const text = searchableText(listing);\n    const counts = {\n      fr: (text.match(FRENCH_MARKERS) || []).length,\n      de: (text.match(GERMAN_MARKERS) || []).length,\n      it: (text.match(ITALIAN_MARKERS) || []).length,\n      en: (text.match(ENGLISH_MARKERS) || []).length,\n    };\n\n    const nonFrenchMax = Math.max(counts.de, counts.it, counts.en);\n\n    if (counts.fr >= 2 && counts.fr >= nonFrenchMax) return null;\n    if (nonFrenchMax < 2) return null;\n\n    if (counts.de === nonFrenchMax) return 'de';\n    if (counts.it === nonFrenchMax) return 'it';\n    return 'en';\n  }\n\n    // --- Copie de n8n/logic/job_targeting.js (testé dans tests/logic/job_targeting.test.js) ---\n// Ciblage du profil : uniquement les trois métiers visés (data, software,\n// devops), uniquement en Suisse romande, et sans les postes seniors.\n// Les sources sont interrogées par métier SANS \"junior\" (jobs.ch, Genève :\n// 66 offres \"data engineer\" contre 2 pour \"junior data engineer\" — la\n// plupart des postes accessibles à un junior ne portent pas la mention), la\n// séniorité est donc tranchée ici, localement.\n\nconst ROLE_PATTERNS = {\n  'data engineer': [\n    /\\b(big )?data engineer/i,\n    /\\bdata engineering\\b/i,\n    /\\banalytics engineer/i,\n    /\\bing[ée]nieur(e|\\(e\\)|·e)?s? (de |en |des )?donn[ée]es\\b/i,\n    /\\bing[ée]nieur(e|\\(e\\)|·e)? (big )?data\\b/i,\n    /\\bd[ée]veloppeur(se|\\(se\\)|·se)? (data|etl|big data)\\b/i,\n    /\\bdata ?ingenieur/i,\n    /\\bdateningenieur/i,\n    /\\betl developer/i,\n  ],\n  'software engineer': [\n    /\\bsoftware (engineer|developer|entwickler)/i,\n    /\\bing[ée]nieur(e|\\(e\\)|·e)? (en |de )?(logiciel|software)/i,\n    // \"Ingénieur développement\" seul couvre aussi la mécanique (\"Développement Moteur\").\n    /\\bing[ée]nieur(e|\\(e\\)|·e)? (en |de )?d[ée]veloppement (logiciel|software|web|full.?stack|back.?end|front.?end|ia|ai|informatique|applicatif)/i,\n    /\\bfull.?stack\\b/i,\n    /\\bd[ée]veloppeur(se|\\(se\\)|·se)?\\b/i,\n    /\\b(full.?stack|back.?end|front.?end|web|python|java|\\.net|c\\+\\+) (engineer|developer)\\b/i,\n    /\\bdeveloper\\b/i,\n    /\\bsoftwareentwickler/i,\n    /\\bprogrammeur/i,\n  ],\n  'devops engineer': [\n    /\\bdev ?ops\\b/i,\n    /\\bdev ?sec ?ops\\b/i,\n    /\\bsite reliability\\b/i,\n    /\\bsre\\b/i,\n    /\\bplatform engineer/i,\n    /\\bcloud engineer/i,\n    /\\bing[ée]nieur(e|\\(e\\)|·e)? (cloud|plateforme)\\b/i,\n  ],\n};\n\n// \"Business Developer\" et \"Développeur commercial\" contiennent \"developer\"\n// mais sont des postes de vente.\nconst NOT_A_TECH_ROLE = /\\b(business develop|d[ée]veloppeu(r|se) (commercial|d'affaires|business)|d[ée]veloppement (commercial|des affaires)|sales)/i;\n\nconst SENIOR_TITLE = /\\b(senior|sr\\.?|lead|principal|staff|head|chief|manager|director|directeur|directrice|architect|architecte|expert|experte|confirm[ée]e?|exp[ée]riment[ée]e?|chef|cheffe|responsable|vp|leiter|leiterin)\\b/i;\n\nconst JUNIOR_TITLE = /\\b(junior|jr\\.?|graduate|entry.level|d[ée]butant(e)?|stage|stagiaire|intern|internship|trainee|apprenti(e)?|apprentissage|alternance|alternant(e)?|working student|werkstudent(in)?|praktikum|praktikant(in)?|jeune dipl[ôo]m[ée](e)?|new grad)\\b/i;\nconst JUNIOR_TEXT = /\\b(junior|graduate|entry.level|d[ée]butant(e)?|jeune dipl[ôo]m[ée](e)?|new grad|premi[èe]re exp[ée]rience)\\b/i;\n\n// \"5+ years of experience\", \"au moins 4 ans d'expérience\", \"5 Jahre Erfahrung\".\nconst YEARS_OF_EXPERIENCE = /(\\d{1,2})\\s*\\+?\\s*(?:-\\s*\\d{1,2}\\s*)?(?:ans|ann[ée]es|years?|yrs|jahre)\\b[^.\\n]{0,40}?(exp[ée]rience|experience|erfahrung)/gi;\nconst MAX_JUNIOR_YEARS = 3;\n\nfunction profileRole(keyword) {\n  return String(keyword || '').toLowerCase().replace(/^\\s*junior\\s+/, '').trim();\n}\n\nfunction matchedRoles(title, profile) {\n  const text = String(title || '');\n  if (NOT_A_TECH_ROLE.test(text)) return [];\n  return profile.keywords.filter((kw) => {\n    const role = profileRole(kw);\n    const patterns = ROLE_PATTERNS[role];\n    return patterns ? patterns.some((re) => re.test(text)) : text.toLowerCase().includes(role);\n  });\n}\n\nfunction requiredYears(text) {\n  let max = 0;\n  for (const m of String(text || '').matchAll(YEARS_OF_EXPERIENCE)) {\n    max = Math.max(max, Number(m[1]));\n  }\n  return max;\n}\n\n// 'junior' : la mention est explicite. 'unspecified' : aucune indication.\n// 'senior' : titre senior/lead/architecte..., ou plus de MAX_JUNIOR_YEARS ans\n// d'expérience demandés sans mention junior dans le titre.\nfunction seniority(title, description) {\n  const juniorTitle = JUNIOR_TITLE.test(title || '');\n  if (!juniorTitle && SENIOR_TITLE.test(title || '')) return 'senior';\n  if (juniorTitle) return 'junior';\n  if (requiredYears(description) > MAX_JUNIOR_YEARS) return 'senior';\n  if (JUNIOR_TEXT.test(description || '')) return 'junior';\n  return 'unspecified';\n}\n\n// Liste blanche plutôt que liste noire : une liste des localités hors\n// Romandie n'est jamais complète (Schlieren, Sursee passaient). Une offre\n// est gardée si sa localisation cite un canton romand ou une ville du\n// profil, ou si elle ne précise rien de plus que le pays (bénéfice du doute).\nconst ROMAND_CANTONS = /\\b(ge|vd|ne|fr|vs|ju|gen[èe]ve|geneva|genf|vaud|waadt|neuch[âa]tel|neuenburg|fribourg|freiburg|valais|wallis|jura)\\b/i;\n// Le Haut-Valais est germanophone, même s'il est en \"VS\"/\"Wallis\".\nconst UPPER_VALAIS = /\\b(brig|brigue|visp|vi[èe]ge|zermatt|naters|leuk|loèche)\\b/i;\nconst COUNTRY_ONLY = /\\b(switzerland|suisse|schweiz|svizzera|ch|remote|t[ée]l[ée]travail|hybrid|hybride|kanton|canton)\\b/gi;\n\nconst LOCATION_ALIASES = {\n  'genève': ['genève', 'geneve', 'geneva', 'genf', 'ginevra'],\n  'lausanne': ['lausanne', 'losanna'],\n  'neuchâtel': ['neuchâtel', 'neuchatel', 'neuenburg'],\n  'fribourg': ['fribourg', 'freiburg'],\n  'sion': ['sion', 'sitten'],\n  'delémont': ['delémont', 'delemont', 'delsberg'],\n};\n\nfunction locationMatches(location, profile) {\n  const text = String(location || '').toLowerCase();\n  if (!text) return false;\n  return profile.locations.some((loc) => {\n    const locLower = loc.toLowerCase();\n    return (LOCATION_ALIASES[locLower] || [locLower]).some((alias) => text.includes(alias));\n  });\n}\n\nfunction isRomandieLocation(location, profile) {\n  const text = String(location || '');\n  if (!text.trim()) return true;\n  if (UPPER_VALAIS.test(text)) return false;\n  if (ROMAND_CANTONS.test(text) || locationMatches(text, profile)) return true;\n  return text.replace(COUNTRY_ONLY, '').replace(/[^\\p{L}]/gu, '') === '';\n}\n\n// matchCategory : 'primary' (métier visé + mention junior/stage),\n// 'secondary' (métier visé, séniorité non précisée), 'excluded' sinon.\nfunction classifyListing(listing, profile) {\n  const title = listing.title || '';\n  const extra = listing.raw_extra || {};\n  const description = [extra.description, extra.description_snippet, extra.description_full]\n    .filter((v) => typeof v === 'string').join(' ');\n\n  const roles = matchedRoles(title, profile);\n  const level = seniority(title, description);\n  const inRomandie = isRomandieLocation(listing.location, profile);\n\n  let matchCategory = 'excluded';\n  if (roles.length > 0 && level !== 'senior' && inRomandie) {\n    matchCategory = level === 'junior' ? 'primary' : 'secondary';\n  }\n\n  const matchScore = roles.length * 3\n    + (level === 'junior' ? 2 : 0)\n    + (locationMatches(listing.location, profile) ? 1 : 0);\n\n  return { matchCategory, matchScore, keywordsMatched: roles, seniority: level };\n}\n\n  const profile = $('Loop Over Items').first().json;\n\n  // Une même offre remonte pour plusieurs villes de recherche (Genève et\n  // Lausanne couvrent Nyon) : on ne la garde qu'une fois par source.\n  const seen = new Set();\n  return items\n    // Marqueurs d'erreur des sources, résumés par \"Format Source Error\".\n    .filter(item => !item.json.__sourceError)\n    .map(item => {\n      const target = classifyListing(item.json, profile);\n      return {\n        json: {\n          ...item.json,\n          matchScore: target.matchScore,\n          matchCategory: target.matchCategory,\n          foreignLanguage: detectForeignLanguage(item.json),\n          locationIncomplete: !item.json.location,\n          keywordsMatched: target.keywordsMatched,\n          searchProfileId: profile.id,\n        },\n      };\n    })\n    .filter(item => item.json.matchCategory !== 'excluded')\n    .filter(item => {\n      const key = item.json.source + '|' + item.json.source_id;\n      if (seen.has(key)) return false;\n      seen.add(key);\n      return true;\n    })\n    .sort((a, b) => b.json.matchScore - a.json.matchScore);\n"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -763,152 +763,16 @@
     },
     {
       "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict",
-            "version": 2
-          },
-          "conditions": [
-            {
-              "id": "ffd124c6-8360-4498-a363-f79eefd0299f",
-              "leftValue": "={{ $json.__sourceError }}",
-              "rightValue": true,
-              "operator": {
-                "type": "boolean",
-                "operation": "true",
-                "singleValue": true
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.2,
-      "position": [
-        1260,
-        200
-      ],
-      "id": "8dfd99c7-14f4-4e9b-9bc5-6c248570cbc4",
-      "name": "If Adzuna OK"
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict",
-            "version": 2
-          },
-          "conditions": [
-            {
-              "id": "c11987e9-e201-44bd-8e9f-b350d46f912d",
-              "leftValue": "={{ $json.__sourceError }}",
-              "rightValue": true,
-              "operator": {
-                "type": "boolean",
-                "operation": "true",
-                "singleValue": true
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.2,
-      "position": [
-        1260,
-        60
-      ],
-      "id": "2097c34f-667c-4e37-991e-ec3c3e5b566f",
-      "name": "If Jooble OK"
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict",
-            "version": 2
-          },
-          "conditions": [
-            {
-              "id": "bd8a5024-b1eb-4d1c-9efc-20f62cf29889",
-              "leftValue": "={{ $json.__sourceError }}",
-              "rightValue": true,
-              "operator": {
-                "type": "boolean",
-                "operation": "true",
-                "singleValue": true
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.2,
-      "position": [
-        1260,
-        -80
-      ],
-      "id": "e0a9e3ce-fce6-4aa0-ad83-358a5d73f1d9",
-      "name": "If Job-Room OK"
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict",
-            "version": 2
-          },
-          "conditions": [
-            {
-              "id": "0475d979-a882-4f1e-bc86-96234e51c03a",
-              "leftValue": "={{ $json.__sourceError }}",
-              "rightValue": true,
-              "operator": {
-                "type": "boolean",
-                "operation": "true",
-                "singleValue": true
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.2,
-      "position": [
-        1260,
-        620
-      ],
-      "id": "c0a86f82-a016-4457-8a7e-5385ffab4ca8",
-      "name": "If Indeed OK"
-    },
-    {
-      "parameters": {
         "mode": "runOnceForAllItems",
         "language": "javaScript",
-        "jsCode": "const failures = items.map(i => i.json);\nconst list = failures.map(f => `<li><b>${f.source}</b> — ${f.message}</li>`).join('');\nreturn [{\n  json: {\n    subject: `Annonces: ${failures.length} source(s) en échec aujourd'hui`,\n    html: `<p>Le digest quotidien a continué sans ces sources (réponse inattendue) :</p><ul>${list}</ul>`,\n  },\n}];",
+        "jsCode": "// --- Copie de n8n/logic/source_errors.js (testé dans tests/logic/source_errors.test.js) ---\nconst MAX_REASON_LENGTH = 160;\n\nfunction escapeHtml(s) {\n  return String(s || '')\n    .replace(/&/g, '&amp;')\n    .replace(/</g, '&lt;')\n    .replace(/>/g, '&gt;');\n}\n\n// n8n formate une erreur HTTP en '503 - \"<corps>\"' ou, via Axios, en\n// \"Request failed with status code 429\" : le code suffit, pas le corps.\nfunction failureReason(message) {\n  const text = String(message || '');\n  const status = text.match(/\\b([45]\\d{2}) - /) || text.match(/status code ([45]\\d{2})/);\n  if (status) return 'HTTP ' + status[1];\n  const clean = text.replace(/<[^>]*>/g, ' ').replace(/(\\\\+n|\\s)+/g, ' ').trim();\n  return clean.length > MAX_REASON_LENGTH ? clean.slice(0, MAX_REASON_LENGTH).trim() + '…' : clean;\n}\n\n// markers : [{ source, message, failed?, total? }]. Un marqueur sans compteur\n// vaut une requête échouée. Renvoie null s'il n'y a rien à signaler.\nfunction summarizeSourceErrors(markers) {\n  const bySource = new Map();\n  for (const marker of markers) {\n    const entry = bySource.get(marker.source)\n      || { source: marker.source, failed: 0, total: 0, reason: failureReason(marker.message) };\n    entry.failed += marker.failed || 1;\n    entry.total += marker.total || marker.failed || 1;\n    bySource.set(marker.source, entry);\n  }\n  if (bySource.size === 0) return null;\n\n  const lines = [...bySource.values()].map((e) =>\n    `<li><b>${escapeHtml(e.source)}</b> — ${e.failed}/${e.total} requête(s) en échec (${escapeHtml(e.reason)})</li>`);\n  return {\n    subject: `Annonces: ${bySource.size} source(s) en échec aujourd'hui`,\n    html: `<p>Le digest quotidien a continué sans ces sources :</p><ul>${lines.join('')}</ul>`,\n  };\n}\n// --- Fin de la copie ---\n\n// Les marqueurs d'erreur de toutes les sources arrivent ici en un seul lot,\n// avec les offres, par \"Merge\" : UN email par profil, une ligne par source.\n// Branché sur un node \"If … OK\" par source, ce node tournait une fois par\n// source en échec et envoyait autant d'emails.\nconst markers = items.map(item => item.json).filter(json => json && json.__sourceError);\nconst alert = summarizeSourceErrors(markers);\nreturn alert ? [{ json: alert }] : [];\n",
         "notice": ""
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1480,
-        760
+        1460,
+        580
       ],
       "id": "d5556932-4c69-461c-851a-ae8e149dc74e",
       "name": "Format Source Error"
@@ -926,8 +790,8 @@
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2.1,
       "position": [
-        1700,
-        760
+        1680,
+        580
       ],
       "id": "71281106-a1d3-48f0-895f-6620e9d2b07c",
       "name": "Send Error Alert",
@@ -937,7 +801,8 @@
           "id": "z5UyWirLbWwy43ph",
           "name": "SMTP account"
         }
-      }
+      },
+      "onError": "continueRegularOutput"
     },
     {
       "name": "CERN Search",
@@ -979,40 +844,6 @@
         "jsCode": "function normalizeCernPosting(raw) {\n  const location = raw.location || {};\n  return {\n    source: 'cern.ch',\n    source_id: raw.id,\n    title: raw.name,\n    company: raw.company ? raw.company.name : 'CERN',\n    url: 'https://jobs.smartrecruiters.com/CERN/' + raw.id,\n    location: [location.city, location.region].filter(Boolean).join(', ') || null,\n    posted_at: raw.releasedDate ? raw.releasedDate.slice(0, 10) : null,\n    raw_extra: {\n      ref_number: raw.refNumber || null,\n      department: raw.department ? raw.department.label : null,\n      function: raw.function ? raw.function.label : null,\n      contract_time: raw.typeOfEmployment ? raw.typeOfEmployment.label : null,\n      experience_level: raw.experienceLevel ? raw.experienceLevel.label : null,\n    },\n  };\n}\n\n    // API publique SmartRecruiters : toutes les offres du CERN en un appel (55 au\n    // 05.10.2026, limite 100), indépendamment du mot-clé — d'où executeOnce sur\n    // \"CERN Search\" (1 appel par profil au lieu d'1 par mot-clé). Le tri par\n    // mot-clé et par lieu est laissé à \"Filter by profile\", comme partout.\n    const input = items[0].json;\n    if (!input || !Array.isArray(input.content)) {\n      return [{ json: { __sourceError: true, source: 'CERN', message: 'réponse inattendue — ' + JSON.stringify(input).slice(0, 500) } }];\n    }\n    return input.content.map(raw => ({ json: normalizeCernPosting(raw) }));\n    "
       },
       "id": "b12cd12c-fea9-4d8c-a9de-bdfee87690da"
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict",
-            "version": 2
-          },
-          "conditions": [
-            {
-              "id": "3c3f5c8e-d6c4-4846-9665-1fff9958fe4c",
-              "leftValue": "={{ $json.__sourceError }}",
-              "rightValue": true,
-              "operator": {
-                "type": "boolean",
-                "operation": "true",
-                "singleValue": true
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.2,
-      "position": [
-        1260,
-        780
-      ],
-      "id": "abd09d3a-fab3-4532-bc2a-ef649e4a27c3",
-      "name": "If CERN OK"
     },
     {
       "name": "LinkedIn Search",
@@ -1089,43 +920,9 @@
         940
       ],
       "parameters": {
-        "jsCode": "function decodeEntities(s) {\n  return String(s || '')\n    .replace(/&amp;/g, '&')\n    .replace(/&#39;/g, \"'\")\n    .replace(/&quot;/g, '\"')\n    .replace(/&lt;/g, '<')\n    .replace(/&gt;/g, '>')\n    .replace(/\\s+/g, ' ')\n    .trim();\n}\n\nfunction firstMatch(html, pattern) {\n  const m = html.match(pattern);\n  return m ? decodeEntities(m[1]) : null;\n}\n\n// L'endpoint invité renvoie une liste de <li> contenant chacun une carte\n// d'offre en HTML (pas de JSON). L'ID stable est dans data-entity-urn ; l'URL\n// de la carte porte des paramètres de tracking (refId, trackingId) qui changent\n// à chaque appel, donc on reconstruit une URL canonique à partir de l'ID.\nfunction parseLinkedinCards(html) {\n  return String(html || '')\n    .split('<li>')\n    .slice(1)\n    .map((card) => {\n      const id = firstMatch(card, /data-entity-urn=\"urn:li:jobPosting:(\\d+)\"/);\n      if (!id) return null;\n      return {\n        source: 'linkedin.com',\n        source_id: id,\n        title: firstMatch(card, /<h3 class=\"base-search-card__title\">([\\s\\S]*?)<\\/h3>/),\n        company: firstMatch(card, /<h4 class=\"base-search-card__subtitle\">[\\s\\S]*?<a[^>]*>([\\s\\S]*?)<\\/a>/),\n        url: 'https://www.linkedin.com/jobs/view/' + id,\n        location: firstMatch(card, /<span class=\"job-search-card__location\">([\\s\\S]*?)<\\/span>/),\n        posted_at: firstMatch(card, /datetime=\"(\\d{4}-\\d{2}-\\d{2})\"/),\n        raw_extra: {},\n      };\n    })\n    .filter((job) => job && job.title);\n}\n\n    // Endpoint invité (sans compte) : 10 cartes HTML par mot-clé, offres publiées\n    // dans les 7 derniers jours (f_TPR=r604800 — le pipeline ne tourne pas le\n    // week-end, une fenêtre de 24 h en perdrait). Un item par mot-clé en entrée.\n    // Une page sans carte = zéro résultat. Un item d'erreur HTTP (429, blocage,\n    // timeout via onError: continueRegularOutput) ne fait plus jeter les\n    // autres villes : leurs offres passent, et un marqueur d'erreur part en\n    // plus vers l'alerte email (\"If LinkedIn OK\" route chaque item à part).\n    const failed = items.filter(item => item.json && item.json.error);\n    const seen = new Set();\n    const jobs = items\n      .filter(item => !(item.json && item.json.error))\n      .flatMap(item => parseLinkedinCards(item.json.data))\n      .filter(job => !seen.has(job.source_id) && seen.add(job.source_id))\n      .map(job => ({ json: job }));\n    if (failed.length > 0) {\n      jobs.push({ json: { __sourceError: true, source: 'LinkedIn', message: failed.length + '/' + items.length\n        + ' requête(s) en échec — ' + JSON.stringify(failed[0].json.error).slice(0, 500) } });\n    }\n    return jobs;\n"
+        "jsCode": "function decodeEntities(s) {\n  return String(s || '')\n    .replace(/&amp;/g, '&')\n    .replace(/&#39;/g, \"'\")\n    .replace(/&quot;/g, '\"')\n    .replace(/&lt;/g, '<')\n    .replace(/&gt;/g, '>')\n    .replace(/\\s+/g, ' ')\n    .trim();\n}\n\nfunction firstMatch(html, pattern) {\n  const m = html.match(pattern);\n  return m ? decodeEntities(m[1]) : null;\n}\n\n// L'endpoint invité renvoie une liste de <li> contenant chacun une carte\n// d'offre en HTML (pas de JSON). L'ID stable est dans data-entity-urn ; l'URL\n// de la carte porte des paramètres de tracking (refId, trackingId) qui changent\n// à chaque appel, donc on reconstruit une URL canonique à partir de l'ID.\nfunction parseLinkedinCards(html) {\n  return String(html || '')\n    .split('<li>')\n    .slice(1)\n    .map((card) => {\n      const id = firstMatch(card, /data-entity-urn=\"urn:li:jobPosting:(\\d+)\"/);\n      if (!id) return null;\n      return {\n        source: 'linkedin.com',\n        source_id: id,\n        title: firstMatch(card, /<h3 class=\"base-search-card__title\">([\\s\\S]*?)<\\/h3>/),\n        company: firstMatch(card, /<h4 class=\"base-search-card__subtitle\">[\\s\\S]*?<a[^>]*>([\\s\\S]*?)<\\/a>/),\n        url: 'https://www.linkedin.com/jobs/view/' + id,\n        location: firstMatch(card, /<span class=\"job-search-card__location\">([\\s\\S]*?)<\\/span>/),\n        posted_at: firstMatch(card, /datetime=\"(\\d{4}-\\d{2}-\\d{2})\"/),\n        raw_extra: {},\n      };\n    })\n    .filter((job) => job && job.title);\n}\n\n    // Endpoint invité (sans compte) : 10 cartes HTML par mot-clé, offres publiées\n    // dans les 7 derniers jours (f_TPR=r604800 — le pipeline ne tourne pas le\n    // week-end, une fenêtre de 24 h en perdrait). Un item par mot-clé en entrée.\n    // Une page sans carte = zéro résultat. Un item d'erreur HTTP (429, blocage,\n    // timeout via onError: continueRegularOutput) ne fait plus jeter les\n    // autres villes : leurs offres passent, et un seul marqueur d'erreur\n    // (avec le décompte des requêtes échouées) part vers l'alerte email.\n    const failed = items.filter(item => item.json && item.json.error);\n    const seen = new Set();\n    const jobs = items\n      .filter(item => !(item.json && item.json.error))\n      .flatMap(item => parseLinkedinCards(item.json.data))\n      .filter(job => !seen.has(job.source_id) && seen.add(job.source_id))\n      .map(job => ({ json: job }));\n    if (failed.length > 0) {\n      jobs.push({ json: { __sourceError: true, source: 'LinkedIn', failed: failed.length, total: items.length,\n        message: JSON.stringify(failed[0].json.error).slice(0, 500) } });\n    }\n    return jobs;\n"
       },
       "id": "c5f1d7e2-69af-4da8-9092-9cb04fd5dcfd"
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict",
-            "version": 2
-          },
-          "conditions": [
-            {
-              "id": "8603e505-d3e3-4fcd-b28d-832062e6977d",
-              "leftValue": "={{ $json.__sourceError }}",
-              "rightValue": true,
-              "operator": {
-                "type": "boolean",
-                "operation": "true",
-                "singleValue": true
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.2,
-      "position": [
-        1260,
-        940
-      ],
-      "id": "82c5c1dc-b299-4e62-83ef-17ab96a78241",
-      "name": "If LinkedIn OK"
     },
     {
       "name": "swissdevjobs Search",
@@ -1158,40 +955,6 @@
         "jsCode": "// swissdevjobs.ch expose toutes ses offres (toute la Suisse, toutes technos)\n// en un seul appel JSON non authentifié : GET https://swissdevjobs.ch/api/jobsLight.\n// Pas de recherche par mot-clé ni par lieu côté source : c'est \"Filter by\n// profile\" qui fait tout le tri, comme pour les autres sources.\n//\n// Un enregistrement brut ressemble à :\n//   { _id, name, company, actualCity, cityCategory, jobUrl, activeFrom,\n//     workplace, jobType, expLevel, annualSalaryFrom, annualSalaryTo,\n//     language, filterTags: [...] }\n// L'URL publique d'une offre est https://swissdevjobs.ch/jobs/<jobUrl>.\nfunction normalizeSwissDevJobsItem(raw) {\n  return {\n    source: 'swissdevjobs.ch',\n    source_id: raw._id,\n    title: raw.name,\n    company: raw.company || null,\n    url: 'https://swissdevjobs.ch/jobs/' + raw.jobUrl,\n    // actualCity est la ville réelle ; cityCategory est un regroupement\n    // (ex: \"Lausanne\" pour Renens), moins précis pour l'exclusion par lieu.\n    location: raw.actualCity || null,\n    // activeFrom est en heure locale suisse (\"2026-10-02T00:00:00.000+02:00\") :\n    // on garde la date telle quelle plutôt que de la convertir en UTC, ce qui\n    // la décalerait au jour précédent.\n    posted_at: raw.activeFrom ? raw.activeFrom.slice(0, 10) : null,\n    raw_extra: {\n      salary_min: raw.annualSalaryFrom || null,\n      salary_max: raw.annualSalaryTo || null,\n      workplace: raw.workplace || null,\n      job_type: raw.jobType || null,\n      exp_level: raw.expLevel || null,\n      language: raw.language || null,\n      tags: raw.filterTags || [],\n    },\n  };\n}\n\n// Endpoint JSON public : toutes les offres tech de Suisse en un appel (~220),\n// d'où executeOnce sur \"swissdevjobs Search\" (1 appel par profil). n8n éclate\n// le tableau JSON de la réponse en un item par offre ; un item d'erreur HTTP\n// (onError: continueRegularOutput) ou une offre sans _id = panne signalée.\nif (items.length === 0) return [];\nconst malformed = items.find(item => !item.json || item.json.error || !item.json._id);\nif (malformed) {\n  return [{ json: { __sourceError: true, source: 'swissdevjobs', message: 'réponse inattendue — ' + JSON.stringify(malformed.json).slice(0, 500) } }];\n}\nreturn items.map(item => ({ json: normalizeSwissDevJobsItem(item.json) }));\n"
       },
       "id": "1a9e226b-19cd-4e1d-9945-f34cc76cf92f"
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict",
-            "version": 2
-          },
-          "conditions": [
-            {
-              "id": "4cad0841-81c2-4268-83c3-2673648d31ed",
-              "leftValue": "={{ $json.__sourceError }}",
-              "rightValue": true,
-              "operator": {
-                "type": "boolean",
-                "operation": "true",
-                "singleValue": true
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.2,
-      "position": [
-        1260,
-        1100
-      ],
-      "id": "2a1c6b5b-532c-4bd9-b489-a5284311d8f9",
-      "name": "If swissdevjobs OK"
     },
     {
       "parameters": {
@@ -1288,9 +1051,9 @@
       "main": [
         [
           {
-            "node": "If Indeed OK",
+            "node": "Merge",
             "type": "main",
-            "index": 0
+            "index": 5
           }
         ]
       ]
@@ -1310,9 +1073,9 @@
       "main": [
         [
           {
-            "node": "If Job-Room OK",
+            "node": "Merge",
             "type": "main",
-            "index": 0
+            "index": 3
           }
         ]
       ]
@@ -1420,7 +1183,7 @@
       "main": [
         [
           {
-            "node": "If Jooble OK",
+            "node": "Merge",
             "type": "main",
             "index": 0
           }
@@ -1431,9 +1194,9 @@
       "main": [
         [
           {
-            "node": "If Adzuna OK",
+            "node": "Merge",
             "type": "main",
-            "index": 0
+            "index": 1
           }
         ]
       ]
@@ -1454,6 +1217,11 @@
         [
           {
             "node": "Filter by profile",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Format Source Error",
             "type": "main",
             "index": 0
           }
@@ -1610,78 +1378,6 @@
         ]
       ]
     },
-    "If Adzuna OK": {
-      "main": [
-        [
-          {
-            "node": "Format Source Error",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Merge",
-            "type": "main",
-            "index": 1
-          }
-        ]
-      ]
-    },
-    "If Jooble OK": {
-      "main": [
-        [
-          {
-            "node": "Format Source Error",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Merge",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "If Job-Room OK": {
-      "main": [
-        [
-          {
-            "node": "Format Source Error",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Merge",
-            "type": "main",
-            "index": 3
-          }
-        ]
-      ]
-    },
-    "If Indeed OK": {
-      "main": [
-        [
-          {
-            "node": "Format Source Error",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Merge",
-            "type": "main",
-            "index": 5
-          }
-        ]
-      ]
-    },
     "Format Source Error": {
       "main": [
         [
@@ -1708,9 +1404,9 @@
       "main": [
         [
           {
-            "node": "If CERN OK",
+            "node": "Merge",
             "type": "main",
-            "index": 0
+            "index": 6
           }
         ]
       ]
@@ -1728,42 +1424,6 @@
     },
     "Normalize LinkedIn": {
       "main": [
-        [
-          {
-            "node": "If LinkedIn OK",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "If CERN OK": {
-      "main": [
-        [
-          {
-            "node": "Format Source Error",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Merge",
-            "type": "main",
-            "index": 6
-          }
-        ]
-      ]
-    },
-    "If LinkedIn OK": {
-      "main": [
-        [
-          {
-            "node": "Format Source Error",
-            "type": "main",
-            "index": 0
-          }
-        ],
         [
           {
             "node": "Merge",
@@ -1786,24 +1446,6 @@
     },
     "Normalize swissdevjobs": {
       "main": [
-        [
-          {
-            "node": "If swissdevjobs OK",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "If swissdevjobs OK": {
-      "main": [
-        [
-          {
-            "node": "Format Source Error",
-            "type": "main",
-            "index": 0
-          }
-        ],
         [
           {
             "node": "Merge",
