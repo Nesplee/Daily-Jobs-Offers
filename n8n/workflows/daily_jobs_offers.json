@@ -340,22 +340,23 @@
           "conditions": [
             {
               "id": "7acb228b-1c5e-4ed7-8532-8890c31b0de4",
-              "leftValue": "={{ $json.foreignLanguage }}",
-              "rightValue": "fr",
+              "leftValue": "={{ $json.needsTranslation }}",
+              "rightValue": true,
               "operator": {
-                "type": "string",
-                "operation": "notEquals"
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
               }
             }
           ],
-          "combinator": "or"
+          "combinator": "and"
         },
         "options": {}
       },
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        1600,
+        1920,
         200
       ],
       "id": "74572c5b-624e-4131-8f01-54dfc9e48a2f",
@@ -400,7 +401,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1760,
+        2080,
         100
       ],
       "id": "fa7f7fd2-c75e-4971-8512-03856a1aa556",
@@ -425,7 +426,7 @@
           "parameters": [
             {
               "name": "text",
-              "value": "={{ $('Filter by profile').item.json.raw_extra.description || $('Filter by profile').item.json.raw_extra.description_snippet || $('Filter by profile').item.json.raw_extra.description_full || '' }}"
+              "value": "={{ $('Skip known and duplicate listings').item.json.raw_extra.description || $('Skip known and duplicate listings').item.json.raw_extra.description_snippet || $('Skip known and duplicate listings').item.json.raw_extra.description_full || '' }}"
             },
             {
               "name": "target_lang",
@@ -445,7 +446,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1840,
+        2160,
         -40
       ],
       "id": "6e2a7c1b-3f45-4d8e-9a2b-7c5d8e1f4a6b",
@@ -456,7 +457,7 @@
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3,
       "position": [
-        2120,
+        2440,
         200
       ],
       "id": "85358100-cea2-4eb9-86ab-841a90bd8461",
@@ -465,12 +466,12 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "// Deux appels DeepL séparés (un pour le titre, un pour la description) au\n  // lieu d'un seul appel avec deux paramètres \"text\" — n8n construit le\n  // corps form-urlencoded à partir d'un objet clé/valeur, donc deux entrées\n  // nommées \"text\" s'écrasaient silencieusement l'une l'autre et seule la\n  // traduction de la description était renvoyée, stockée à tort comme titre\n  // (ex: \"Nous ouvrons un poste d'IT Tooling / DevOps Specialist pour...\").\n  const original = $('Filter by profile').item.json;\n  const titleTranslations = $('Traduction Deepl').item.json.translations || [];\n  const descTranslations = $json.translations || [];\n\n  return {\n    json: {\n      ...original,\n      title: titleTranslations[0] ? titleTranslations[0].text : original.title,\n      raw_extra: {\n        ...original.raw_extra,\n        description_fr: descTranslations[0] ? descTranslations[0].text : null,\n        title_original: original.title,\n      },\n    },\n  };\n"
+        "jsCode": "// Deux appels DeepL séparés (un pour le titre, un pour la description) au\n  // lieu d'un seul appel avec deux paramètres \"text\" — n8n construit le\n  // corps form-urlencoded à partir d'un objet clé/valeur, donc deux entrées\n  // nommées \"text\" s'écrasaient silencieusement l'une l'autre et seule la\n  // traduction de la description était renvoyée, stockée à tort comme titre\n  // (ex: \"Nous ouvrons un poste d'IT Tooling / DevOps Specialist pour...\").\n  const original = $('Skip known and duplicate listings').item.json;\n  const titleTranslations = $('Traduction Deepl').item.json.translations || [];\n  const descTranslations = $json.translations || [];\n\n  return {\n    json: {\n      ...original,\n      title: titleTranslations[0] ? titleTranslations[0].text : original.title,\n      raw_extra: {\n        ...original.raw_extra,\n        description_fr: descTranslations[0] ? descTranslations[0].text : null,\n        title_original: original.title,\n      },\n    },\n  };\n"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1920,
+        2240,
         100
       ],
       "id": "08649c06-159a-45e5-b124-12e79ae7406c",
@@ -479,7 +480,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": " INSERT INTO job_listings (\n    source, source_id, title, company, url, location,\n    keywords_matched, search_profile_id, posted_at, raw_extra,\n    match_score, match_category, location_incomplete, foreign_language\n  ) VALUES (\n    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14\n  )\n  ON CONFLICT (source, source_id) DO UPDATE SET\n    last_checked_at = now(),\n    raw_extra = EXCLUDED.raw_extra,\n    match_score = EXCLUDED.match_score,\n    match_category = EXCLUDED.match_category,\n    location_incomplete = EXCLUDED.location_incomplete,\n    foreign_language = EXCLUDED.foreign_language\n  RETURNING id, (xmax = 0) AS is_new_row;\n",
+        "query": " INSERT INTO job_listings (\n    source, source_id, title, company, url, location,\n    keywords_matched, search_profile_id, posted_at, raw_extra,\n    match_score, match_category, location_incomplete, foreign_language\n  ) VALUES (\n    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14\n  )\n  ON CONFLICT (source, source_id) DO UPDATE SET\n    last_checked_at = now(),\n    -- Fusion et non remplacement : une offre déjà connue repasse sans être\n    -- retraduite, ses clés title_original et description_fr doivent survivre.\n    raw_extra = job_listings.raw_extra || EXCLUDED.raw_extra,\n    match_score = EXCLUDED.match_score,\n    match_category = EXCLUDED.match_category,\n    location_incomplete = EXCLUDED.location_incomplete,\n    foreign_language = EXCLUDED.foreign_language\n  RETURNING id, (xmax = 0) AS is_new_row;\n",
         "options": {
           "queryReplacement": "={{ [$json.source, String($json.source_id), $json.title, $json.company, $json.url, $json.location,\n  $json.keywordsMatched, $json.searchProfileId, $json.posted_at, JSON.stringify($json.raw_extra),\n  $json.matchScore, $json.matchCategory, $json.locationIncomplete, $json.foreignLanguage] }}"
         }
@@ -487,7 +488,7 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        2260,
+        2580,
         200
       ],
       "id": "a6309cd6-6870-4824-a3a0-05064bcce496",
@@ -995,6 +996,44 @@
     },
     {
       "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Verdict sur les offres retenues par \"Filter by profile\", AVANT traduction :\n-- DeepL coûte 2 appels et 2,2 s par offre, et la plupart des offres d'un jour\n-- étaient déjà là la veille. $1 est un tableau JSON\n-- [{k, source, source_id, title, company, score}] ; une ligne par offre :\n--   known     : même (source, source_id) déjà en base, donc déjà traduite ;\n--   duplicate : offre nouvelle, mais doublon d'une offre en base ou d'une\n--               offre mieux notée du même lot, à écarter sans la traduire.\n--\n-- La règle \"même offre\" est celle de n8n/sql/select_digest_offers.sql (à\n-- garder alignée), appliquée ici aux intitulés ORIGINAUX : en base, title est\n-- traduit et l'original est dans raw_extra.title_original. Un doublon dans une\n-- autre langue passe donc ce filtre, est traduit, puis écarté par le digest.\nWITH incoming AS (\n  SELECT (e->>'k')::int AS k, e->>'source' AS source, e->>'source_id' AS source_id,\n         coalesce((e->>'score')::int, 0) AS score,\n         dedup_company(e->>'company') AS d_company, dedup_title(e->>'title') AS d_title\n  FROM jsonb_array_elements($1::jsonb) AS e\n), stored AS (\n  SELECT j.id, j.source, j.source_id, j.created_at,\n         dedup_company(j.company) AS d_company,\n         dedup_title(coalesce(j.raw_extra->>'title_original', j.title)) AS d_title\n  FROM job_listings j\n), known AS (\n  SELECT i.k\n  FROM incoming i\n  JOIN stored s ON s.source = i.source AND s.source_id = i.source_id\n), fresh AS (\n  SELECT i.* FROM incoming i WHERE i.k NOT IN (SELECT k FROM known)\n), stored_duplicates AS (\n  SELECT f.k, s.id\n  FROM fresh f\n  JOIN stored s\n    ON (\n     ((s.d_company LIKE f.d_company || '%' OR f.d_company LIKE s.d_company || '%')\n      AND similarity(f.d_title, s.d_title) >= 0.7)\n     OR (f.d_title = s.d_title AND length(f.d_title) >= 20\n         AND (f.d_company IS NULL OR s.d_company IS NULL\n              OR f.d_company IN ('jobroom', 'jobup') OR s.d_company IN ('jobroom', 'jobup')))\n   )\n   AND NOT (f.source = s.source AND f.source <> 'jooble.ch'\n            AND s.created_at::date = CURRENT_DATE\n            AND f.d_title <> s.d_title)\n), batch_duplicates AS (\n  -- Le mieux noté du lot reste, à score égal le premier dans l'ordre d'arrivée.\n  SELECT f.k\n  FROM fresh f\n  JOIN fresh o\n    ON o.k <> f.k\n   AND (\n     ((o.d_company LIKE f.d_company || '%' OR f.d_company LIKE o.d_company || '%')\n      AND similarity(f.d_title, o.d_title) >= 0.7)\n     OR (f.d_title = o.d_title AND length(f.d_title) >= 20\n         AND (f.d_company IS NULL OR o.d_company IS NULL\n              OR f.d_company IN ('jobroom', 'jobup') OR o.d_company IN ('jobroom', 'jobup')))\n   )\n   AND NOT (f.source = o.source AND f.source <> 'jooble.ch' AND f.d_title <> o.d_title)\n   AND (o.score, f.k) > (f.score, o.k)\n), still_listed AS (\n  -- L'offre en base est toujours publiée ailleurs : sans ce rafraîchissement\n  -- elle expirerait (TTL sur last_checked_at) et son doublon serait renvoyé.\n  UPDATE job_listings SET last_checked_at = now()\n  WHERE id IN (SELECT id FROM stored_duplicates)\n  RETURNING id\n)\nSELECT i.k,\n       i.k IN (SELECT k FROM known) AS known,\n       (i.k IN (SELECT k FROM stored_duplicates) OR i.k IN (SELECT k FROM batch_duplicates)) AS duplicate\nFROM incoming i\nORDER BY i.k;\n",
+        "options": {
+          "queryReplacement": "={{ [ JSON.stringify($('Filter by profile').all().map((item, k) => ({\n  k, source: item.json.source, source_id: String(item.json.source_id), title: item.json.title,\n  company: item.json.company, score: item.json.matchScore }))) ] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1600,
+        200
+      ],
+      "id": "79f11de4-74df-4285-a134-7d7e62fc0778",
+      "name": "Check listings vs DB",
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "zIIUfintNuifHQcc",
+          "name": "annonces db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Applique le verdict de \"Check listings vs DB\" (une ligne {k, known,\n// duplicate} par offre, k = rang dans la sortie de \"Filter by profile\") :\n// - offre déjà en base : gardée pour rafraîchir sa ligne, sans retraduction ;\n// - doublon d'une offre connue ou d'une meilleure offre du lot : écartée ;\n// - offre réellement nouvelle : gardée et envoyée à DeepL.\nconst verdicts = new Map($('Check listings vs DB').all().map(row => [row.json.k, row.json]));\n\nreturn $('Filter by profile').all()\n  .map((item, k) => ({ item, verdict: verdicts.get(k) || {} }))\n  .filter(({ verdict }) => verdict.known || !verdict.duplicate)\n  .map(({ item, verdict }) => ({ json: { ...item.json, needsTranslation: !verdict.known } }));\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        200
+      ],
+      "id": "f696c8b6-e69e-4f6a-8046-2ba46275f430",
+      "name": "Skip known and duplicate listings"
+    },
+    {
+      "parameters": {
         "url": "https://ohws.prospective.ch/public/v1/careercenter/1000936/",
         "sendQuery": true,
         "queryParameters": {
@@ -1375,7 +1414,7 @@
       "main": [
         [
           {
-            "node": "If",
+            "node": "Check listings vs DB",
             "type": "main",
             "index": 0
           }
@@ -1675,6 +1714,28 @@
         [
           {
             "node": "Postgres",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check listings vs DB": {
+      "main": [
+        [
+          {
+            "node": "Skip known and duplicate listings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Skip known and duplicate listings": {
+      "main": [
+        [
+          {
+            "node": "If",
             "type": "main",
             "index": 0
           }

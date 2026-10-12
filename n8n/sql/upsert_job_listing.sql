@@ -9,7 +9,9 @@ INSERT INTO job_listings (
 )
 ON CONFLICT (source, source_id) DO UPDATE SET
   last_checked_at = now(),
-  raw_extra = EXCLUDED.raw_extra,
+  -- Fusion et non remplacement : une offre déjà connue repasse sans être
+  -- retraduite, ses clés title_original et description_fr doivent survivre.
+  raw_extra = job_listings.raw_extra || EXCLUDED.raw_extra,
   match_score = EXCLUDED.match_score,
   match_category = EXCLUDED.match_category,
   location_incomplete = EXCLUDED.location_incomplete,
