@@ -405,7 +405,8 @@
         100
       ],
       "id": "fa7f7fd2-c75e-4971-8512-03856a1aa556",
-      "name": "Traduction Deepl"
+      "name": "Traduction Deepl",
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
@@ -450,7 +451,8 @@
         -40
       ],
       "id": "6e2a7c1b-3f45-4d8e-9a2b-7c5d8e1f4a6b",
-      "name": "Traduction Deepl Description"
+      "name": "Traduction Deepl Description",
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {},
@@ -466,7 +468,7 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "// Deux appels DeepL séparés (un pour le titre, un pour la description) au\n  // lieu d'un seul appel avec deux paramètres \"text\" — n8n construit le\n  // corps form-urlencoded à partir d'un objet clé/valeur, donc deux entrées\n  // nommées \"text\" s'écrasaient silencieusement l'une l'autre et seule la\n  // traduction de la description était renvoyée, stockée à tort comme titre\n  // (ex: \"Nous ouvrons un poste d'IT Tooling / DevOps Specialist pour...\").\n  const original = $('Skip known and duplicate listings').item.json;\n  const titleTranslations = $('Traduction Deepl').item.json.translations || [];\n  const descTranslations = $json.translations || [];\n\n  return {\n    json: {\n      ...original,\n      title: titleTranslations[0] ? titleTranslations[0].text : original.title,\n      raw_extra: {\n        ...original.raw_extra,\n        description_fr: descTranslations[0] ? descTranslations[0].text : null,\n        title_original: original.title,\n      },\n    },\n  };\n"
+        "jsCode": "// Deux appels DeepL séparés (un pour le titre, un pour la description) au\n  // lieu d'un seul appel avec deux paramètres \"text\" — n8n construit le\n  // corps form-urlencoded à partir d'un objet clé/valeur, donc deux entrées\n  // nommées \"text\" s'écrasaient silencieusement l'une l'autre et seule la\n  // traduction de la description était renvoyée, stockée à tort comme titre\n  // (ex: \"Nous ouvrons un poste d'IT Tooling / DevOps Specialist pour...\").\n  // DeepL en panne ou quota épuisé (onError: continueRegularOutput sur les deux\n  // nodes DeepL) : pas de \"translations\" dans la réponse, l'offre est gardée\n  // avec son intitulé d'origine au lieu d'arrêter tout le digest.\n  const original = $('Skip known and duplicate listings').item.json;\n  const titleTranslations = $('Traduction Deepl').item.json.translations || [];\n  const descTranslations = $json.translations || [];\n\n  return {\n    json: {\n      ...original,\n      title: titleTranslations[0] ? titleTranslations[0].text : original.title,\n      raw_extra: {\n        ...original.raw_extra,\n        description_fr: descTranslations[0] ? descTranslations[0].text : null,\n        title_original: original.title,\n      },\n    },\n  };\n"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
