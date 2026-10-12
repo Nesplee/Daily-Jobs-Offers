@@ -304,7 +304,7 @@
     },
     {
       "parameters": {
-        "numberInputs": 9
+        "numberInputs": 11
       },
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3,
@@ -317,7 +317,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const FRENCH_WORDS = ['et', 'le', 'la', 'les', 'des', 'pour', 'avec', 'notre', 'nos', 'vous', 'êtes',\n  'nous', 'recherchons', 'poste', 'équipe', 'expérience', 'compétences'];\n  const GERMAN_WORDS = ['und', 'der', 'die', 'das', 'mit', 'für', 'sind', 'werden', 'sie', 'ihre',\n  'unsere', 'kenntnisse', 'erfahrung', 'aufgaben', 'wir', 'suchen', 'stelle', 'unternehmen'];\n  const ITALIAN_WORDS = ['e', 'il', 'la', 'di', 'per', 'con', 'sono', 'nostra', 'nostro', 'esperienza',\n  'competenze', 'cerchiamo', 'azienda', 'lavoro'];\n  const ENGLISH_WORDS = ['the', 'and', 'you', 'our', 'for', 'with', 'are', 'will', 'team', 'looking',\n  'join', 'experience', 'skills', 'role', 'we'];\n\n  function buildMarker(words) {\n    return new RegExp('\\\\b(' + words.join('|') + ')\\\\b', 'gi');\n  }\n\n  const FRENCH_MARKERS = buildMarker(FRENCH_WORDS);\n  const GERMAN_MARKERS = buildMarker(GERMAN_WORDS);\n  const ITALIAN_MARKERS = buildMarker(ITALIAN_WORDS);\n  const ENGLISH_MARKERS = buildMarker(ENGLISH_WORDS);\n\n  function searchableText(listing) {\n    return [\n      listing.title || '',\n      listing.raw_extra && (listing.raw_extra.description || listing.raw_extra.description_snippet ||\n  listing.raw_extra.description_full) || '',\n    ].join(' ').toLowerCase();\n  }\n\n\n  function detectForeignLanguage(listing) {\n    const text = searchableText(listing);\n    const counts = {\n      fr: (text.match(FRENCH_MARKERS) || []).length,\n      de: (text.match(GERMAN_MARKERS) || []).length,\n      it: (text.match(ITALIAN_MARKERS) || []).length,\n      en: (text.match(ENGLISH_MARKERS) || []).length,\n    };\n\n    const nonFrenchMax = Math.max(counts.de, counts.it, counts.en);\n\n    if (counts.fr >= 2 && counts.fr >= nonFrenchMax) return null;\n    if (nonFrenchMax < 2) return null;\n\n    if (counts.de === nonFrenchMax) return 'de';\n    if (counts.it === nonFrenchMax) return 'it';\n    return 'en';\n  }\n\n    // --- Copie de n8n/logic/job_targeting.js (testé dans tests/logic/job_targeting.test.js) ---\n// Ciblage du profil : uniquement les trois métiers visés (data, software,\n// devops), uniquement en Suisse romande, et sans les postes seniors.\n// Les sources sont interrogées par métier SANS \"junior\" (jobs.ch, Genève :\n// 66 offres \"data engineer\" contre 2 pour \"junior data engineer\" — la\n// plupart des postes accessibles à un junior ne portent pas la mention), la\n// séniorité est donc tranchée ici, localement.\n\nconst ROLE_PATTERNS = {\n  'data engineer': [\n    /\\b(big )?data engineer/i,\n    /\\bdata engineering\\b/i,\n    /\\banalytics engineer/i,\n    /\\bing[ée]nieur(e|\\(e\\)|·e)?s? (de |en |des )?donn[ée]es\\b/i,\n    /\\bing[ée]nieur(e|\\(e\\)|·e)? (big )?data\\b/i,\n    /\\bd[ée]veloppeur(se|\\(se\\)|·se)? (data|etl|big data)\\b/i,\n    /\\bdata ?ingenieur/i,\n    /\\bdateningenieur/i,\n    /\\betl developer/i,\n  ],\n  'software engineer': [\n    /\\bsoftware (engineer|developer|entwickler)/i,\n    /\\bing[ée]nieur(e|\\(e\\)|·e)? (en |de )?(logiciel|software)/i,\n    // \"Ingénieur développement\" seul couvre aussi la mécanique (\"Développement Moteur\").\n    /\\bing[ée]nieur(e|\\(e\\)|·e)? (en |de )?d[ée]veloppement (logiciel|software|web|full.?stack|back.?end|front.?end|ia|ai|informatique|applicatif)/i,\n    /\\bfull.?stack\\b/i,\n    /\\bd[ée]veloppeur(se|\\(se\\)|·se)?\\b/i,\n    /\\b(full.?stack|back.?end|front.?end|web|python|java|\\.net|c\\+\\+) (engineer|developer)\\b/i,\n    /\\bdeveloper\\b/i,\n    /\\bsoftwareentwickler/i,\n    /\\bprogrammeur/i,\n  ],\n  'devops engineer': [\n    /\\bdev ?ops\\b/i,\n    /\\bdev ?sec ?ops\\b/i,\n    /\\bsite reliability\\b/i,\n    /\\bsre\\b/i,\n    /\\bplatform engineer/i,\n    /\\bcloud engineer/i,\n    /\\bing[ée]nieur(e|\\(e\\)|·e)? (cloud|plateforme)\\b/i,\n  ],\n};\n\n// \"Business Developer\" et \"Développeur commercial\" contiennent \"developer\"\n// mais sont des postes de vente.\nconst NOT_A_TECH_ROLE = /\\b(business develop|d[ée]veloppeu(r|se) (commercial|d'affaires|business)|d[ée]veloppement (commercial|des affaires)|sales)/i;\n\nconst SENIOR_TITLE = /\\b(senior|sr\\.?|lead|principal|staff|head|chief|manager|director|directeur|directrice|architect|architecte|expert|experte|confirm[ée]e?|exp[ée]riment[ée]e?|chef|cheffe|responsable|vp|leiter|leiterin)\\b/i;\n\nconst JUNIOR_TITLE = /\\b(junior|jr\\.?|graduate|entry.level|d[ée]butant(e)?|stage|stagiaire|intern|internship|trainee|apprenti(e)?|apprentissage|alternance|alternant(e)?|working student|werkstudent(in)?|praktikum|praktikant(in)?|jeune dipl[ôo]m[ée](e)?|new grad)\\b/i;\nconst JUNIOR_TEXT = /\\b(junior|graduate|entry.level|d[ée]butant(e)?|jeune dipl[ôo]m[ée](e)?|new grad|premi[èe]re exp[ée]rience)\\b/i;\n\n// \"5+ years of experience\", \"au moins 4 ans d'expérience\", \"5 Jahre Erfahrung\".\nconst YEARS_OF_EXPERIENCE = /(\\d{1,2})\\s*\\+?\\s*(?:-\\s*\\d{1,2}\\s*)?(?:ans|ann[ée]es|years?|yrs|jahre)\\b[^.\\n]{0,40}?(exp[ée]rience|experience|erfahrung)/gi;\nconst MAX_JUNIOR_YEARS = 3;\n\nfunction profileRole(keyword) {\n  return String(keyword || '').toLowerCase().replace(/^\\s*junior\\s+/, '').trim();\n}\n\nfunction matchedRoles(title, profile) {\n  const text = String(title || '');\n  if (NOT_A_TECH_ROLE.test(text)) return [];\n  return profile.keywords.filter((kw) => {\n    const role = profileRole(kw);\n    const patterns = ROLE_PATTERNS[role];\n    return patterns ? patterns.some((re) => re.test(text)) : text.toLowerCase().includes(role);\n  });\n}\n\nfunction requiredYears(text) {\n  let max = 0;\n  for (const m of String(text || '').matchAll(YEARS_OF_EXPERIENCE)) {\n    max = Math.max(max, Number(m[1]));\n  }\n  return max;\n}\n\n// 'junior' : la mention est explicite. 'unspecified' : aucune indication.\n// 'senior' : titre senior/lead/architecte..., ou plus de MAX_JUNIOR_YEARS ans\n// d'expérience demandés sans mention junior dans le titre.\nfunction seniority(title, description) {\n  const juniorTitle = JUNIOR_TITLE.test(title || '');\n  if (!juniorTitle && SENIOR_TITLE.test(title || '')) return 'senior';\n  if (juniorTitle) return 'junior';\n  if (requiredYears(description) > MAX_JUNIOR_YEARS) return 'senior';\n  if (JUNIOR_TEXT.test(description || '')) return 'junior';\n  return 'unspecified';\n}\n\n// Liste blanche plutôt que liste noire : une liste des localités hors\n// Romandie n'est jamais complète (Schlieren, Sursee passaient). Une offre\n// est gardée si sa localisation cite un canton romand ou une ville du\n// profil, ou si elle ne précise rien de plus que le pays (bénéfice du doute).\nconst ROMAND_CANTONS = /\\b(ge|vd|ne|fr|vs|ju|gen[èe]ve|geneva|genf|vaud|waadt|neuch[âa]tel|neuenburg|fribourg|freiburg|valais|wallis|jura)\\b/i;\n// Le Haut-Valais est germanophone, même s'il est en \"VS\"/\"Wallis\".\nconst UPPER_VALAIS = /\\b(brig|brigue|visp|vi[èe]ge|zermatt|naters|leuk|loèche)\\b/i;\nconst COUNTRY_ONLY = /\\b(switzerland|suisse|schweiz|svizzera|ch|remote|t[ée]l[ée]travail|hybrid|hybride|kanton|canton)\\b/gi;\n\nconst LOCATION_ALIASES = {\n  'genève': ['genève', 'geneve', 'geneva', 'genf', 'ginevra'],\n  'lausanne': ['lausanne', 'losanna'],\n  'neuchâtel': ['neuchâtel', 'neuchatel', 'neuenburg'],\n  'fribourg': ['fribourg', 'freiburg'],\n  'sion': ['sion', 'sitten'],\n  'delémont': ['delémont', 'delemont', 'delsberg'],\n};\n\nfunction locationMatches(location, profile) {\n  const text = String(location || '').toLowerCase();\n  if (!text) return false;\n  return profile.locations.some((loc) => {\n    const locLower = loc.toLowerCase();\n    return (LOCATION_ALIASES[locLower] || [locLower]).some((alias) => text.includes(alias));\n  });\n}\n\nfunction isRomandieLocation(location, profile) {\n  const text = String(location || '');\n  if (!text.trim()) return true;\n  if (UPPER_VALAIS.test(text)) return false;\n  if (ROMAND_CANTONS.test(text) || locationMatches(text, profile)) return true;\n  return text.replace(COUNTRY_ONLY, '').replace(/[^\\p{L}]/gu, '') === '';\n}\n\n// matchCategory : 'primary' (métier visé + mention junior/stage),\n// 'secondary' (métier visé, séniorité non précisée), 'excluded' sinon.\nfunction classifyListing(listing, profile) {\n  const title = listing.title || '';\n  const extra = listing.raw_extra || {};\n  const description = [extra.description, extra.description_snippet, extra.description_full]\n    .filter((v) => typeof v === 'string').join(' ');\n\n  const roles = matchedRoles(title, profile);\n  const level = seniority(title, description);\n  const inRomandie = isRomandieLocation(listing.location, profile);\n\n  let matchCategory = 'excluded';\n  if (roles.length > 0 && level !== 'senior' && inRomandie) {\n    matchCategory = level === 'junior' ? 'primary' : 'secondary';\n  }\n\n  const matchScore = roles.length * 3\n    + (level === 'junior' ? 2 : 0)\n    + (locationMatches(listing.location, profile) ? 1 : 0);\n\n  return { matchCategory, matchScore, keywordsMatched: roles, seniority: level };\n}\n\n  const profile = $('Loop Over Items').first().json;\n\n  // Une même offre remonte pour plusieurs villes de recherche (Genève et\n  // Lausanne couvrent Nyon) : on ne la garde qu'une fois par source.\n  const seen = new Set();\n  return items\n    // Marqueurs d'erreur des sources, résumés par \"Format Source Error\".\n    .filter(item => !item.json.__sourceError)\n    .map(item => {\n      const target = classifyListing(item.json, profile);\n      return {\n        json: {\n          ...item.json,\n          matchScore: target.matchScore,\n          matchCategory: target.matchCategory,\n          foreignLanguage: detectForeignLanguage(item.json),\n          locationIncomplete: !item.json.location,\n          keywordsMatched: target.keywordsMatched,\n          searchProfileId: profile.id,\n        },\n      };\n    })\n    .filter(item => item.json.matchCategory !== 'excluded')\n    .filter(item => {\n      const key = item.json.source + '|' + item.json.source_id;\n      if (seen.has(key)) return false;\n      seen.add(key);\n      return true;\n    })\n    .sort((a, b) => b.json.matchScore - a.json.matchScore);\n"
+        "jsCode": "const FRENCH_WORDS = ['et', 'le', 'la', 'les', 'des', 'pour', 'avec', 'notre', 'nos', 'vous', 'êtes',\n  'nous', 'recherchons', 'poste', 'équipe', 'expérience', 'compétences'];\n  const GERMAN_WORDS = ['und', 'der', 'die', 'das', 'mit', 'für', 'sind', 'werden', 'sie', 'ihre',\n  'unsere', 'kenntnisse', 'erfahrung', 'aufgaben', 'wir', 'suchen', 'stelle', 'unternehmen'];\n  const ITALIAN_WORDS = ['e', 'il', 'la', 'di', 'per', 'con', 'sono', 'nostra', 'nostro', 'esperienza',\n  'competenze', 'cerchiamo', 'azienda', 'lavoro'];\n  const ENGLISH_WORDS = ['the', 'and', 'you', 'our', 'for', 'with', 'are', 'will', 'team', 'looking',\n  'join', 'experience', 'skills', 'role', 'we'];\n\n  function buildMarker(words) {\n    return new RegExp('\\\\b(' + words.join('|') + ')\\\\b', 'gi');\n  }\n\n  const FRENCH_MARKERS = buildMarker(FRENCH_WORDS);\n  const GERMAN_MARKERS = buildMarker(GERMAN_WORDS);\n  const ITALIAN_MARKERS = buildMarker(ITALIAN_WORDS);\n  const ENGLISH_MARKERS = buildMarker(ENGLISH_WORDS);\n\n  function searchableText(listing) {\n    return [\n      listing.title || '',\n      listing.raw_extra && (listing.raw_extra.description || listing.raw_extra.description_snippet ||\n  listing.raw_extra.description_full) || '',\n    ].join(' ').toLowerCase();\n  }\n\n\n  function detectForeignLanguage(listing) {\n    const text = searchableText(listing);\n    const counts = {\n      fr: (text.match(FRENCH_MARKERS) || []).length,\n      de: (text.match(GERMAN_MARKERS) || []).length,\n      it: (text.match(ITALIAN_MARKERS) || []).length,\n      en: (text.match(ENGLISH_MARKERS) || []).length,\n    };\n\n    const nonFrenchMax = Math.max(counts.de, counts.it, counts.en);\n\n    if (counts.fr >= 2 && counts.fr >= nonFrenchMax) return null;\n    if (nonFrenchMax < 2) return null;\n\n    if (counts.de === nonFrenchMax) return 'de';\n    if (counts.it === nonFrenchMax) return 'it';\n    return 'en';\n  }\n\n    // --- Copie de n8n/logic/job_targeting.js (testé dans tests/logic/job_targeting.test.js) ---\n// Ciblage du profil : uniquement les métiers visés (data engineer, data\n// analyst, software, devops, support applicatif), uniquement en Suisse\n// romande, et sans les postes seniors.\n// Les sources sont interrogées par métier SANS \"junior\" (jobs.ch, Genève :\n// 66 offres \"data engineer\" contre 2 pour \"junior data engineer\" — la\n// plupart des postes accessibles à un junior ne portent pas la mention), la\n// séniorité est donc tranchée ici, localement.\n\nconst ROLE_PATTERNS = {\n  'data engineer': [\n    /\\b(big )?data engineer/i,\n    /\\bdata engineering\\b/i,\n    /\\banalytics engineer/i,\n    /\\bing[ée]nieur(e|\\(e\\)|·e)?s? (de |en |des )?donn[ée]es\\b/i,\n    /\\bing[ée]nieur(e|\\(e\\)|·e)? (big )?data\\b/i,\n    /\\bd[ée]veloppeur(se|\\(se\\)|·se)? (data|etl|big data)\\b/i,\n    /\\bdata ?ingenieur/i,\n    /\\bdateningenieur/i,\n    /\\betl developer/i,\n  ],\n  'data analyst': [\n    /\\bdata analyst/i,\n    /\\banalyste (de |des |en )?(donn[ée]es|data)\\b/i,\n    /\\bsp[ée]cialiste (de |des |en )?donn[ée]es\\b/i,\n    /\\bdata (specialist|sp[ée]cialiste)\\b/i,\n    /\\b(bi|business intelligence) (analyst|analyste|developer|engineer|specialist)\\b/i,\n    // \"Reporting Specialist\" seul désigne du reporting fiscal ou réglementaire.\n    /\\breporting analyst\\b/i,\n    /\\bdatenanalyst/i,\n  ],\n  // Support et intégration d'applications : \"Application Support Specialist\",\n  // \"Data Production Support\", \"Administrateur·rice et intégrateur·rice\n  // d'applications\". Pas le support bureautique (\"IT Support\", \"Helpdesk\").\n  'application support': [\n    /\\b(applications?|applicati(f|ve)|production) support\\b/i,\n    /\\bsupport (applicatif|d'applications?|de production)\\b/i,\n    /\\b(administrat|int[ée]grat)(eur|rice)[^,(]{0,40}\\bapplications?\\b/i,\n    /\\bapplication (engineer|administrator|integrator|specialist)\\b/i,\n    /\\bing[ée]nieur(e|\\(e\\)|·e)? (d'application|applicatif|en int[ée]gration|d'int[ée]gration)/i,\n    /\\bintegration engineer\\b/i,\n  ],\n  'software engineer': [\n    /\\bsoftware (engineer|developer|entwickler)/i,\n    /\\bing[ée]nieur(e|\\(e\\)|·e)? (en |de )?(logiciel|software)/i,\n    // \"Ingénieur développement\" seul couvre aussi la mécanique (\"Développement Moteur\").\n    /\\bing[ée]nieur(e|\\(e\\)|·e)? (en |de )?d[ée]veloppement (logiciel|software|web|full.?stack|back.?end|front.?end|ia|ai|informatique|applicatif)/i,\n    /\\bfull.?stack\\b/i,\n    /\\bd[ée]veloppeur(se|\\(se\\)|·se)?\\b/i,\n    /\\b(full.?stack|back.?end|front.?end|web|python|java|\\.net|c\\+\\+) (engineer|developer)\\b/i,\n    /\\bdeveloper\\b/i,\n    /\\bsoftwareentwickler/i,\n    /\\bprogrammeur/i,\n  ],\n  'devops engineer': [\n    /\\bdev ?ops\\b/i,\n    /\\bdev ?sec ?ops\\b/i,\n    /\\bsite reliability\\b/i,\n    /\\bsre\\b/i,\n    /\\bplatform engineer/i,\n    /\\bcloud engineer/i,\n    /\\bing[ée]nieur(e|\\(e\\)|·e)? (cloud|plateforme)\\b/i,\n  ],\n};\n\n// \"Business Developer\" et \"Développeur commercial\" contiennent \"developer\"\n// mais sont des postes de vente.\nconst NOT_A_TECH_ROLE = /\\b(business develop|d[ée]veloppeu(r|se) (commercial|d'affaires|business)|d[ée]veloppement (commercial|des affaires)|sales)/i;\n\nconst SENIOR_TITLE = /\\b(senior|sr\\.?|lead|principal|staff|head|chief|manager|director|directeur|directrice|architect|architecte|expert|experte|confirm[ée]e?|exp[ée]riment[ée]e?|chef|cheffe|responsable|vp|leiter|leiterin)\\b/i;\n\nconst JUNIOR_TITLE = /\\b(junior|jr\\.?|graduate|entry.level|d[ée]butant(e)?|stage|stagiaire|intern|internship|trainee|apprenti(e)?|apprentissage|alternance|alternant(e)?|working student|werkstudent(in)?|praktikum|praktikant(in)?|jeune dipl[ôo]m[ée](e)?|new grad)\\b/i;\nconst JUNIOR_TEXT = /\\b(junior|graduate|entry.level|d[ée]butant(e)?|jeune dipl[ôo]m[ée](e)?|new grad|premi[èe]re exp[ée]rience)\\b/i;\n\n// \"5+ years of experience\", \"au moins 4 ans d'expérience\", \"5 Jahre Erfahrung\".\nconst YEARS_OF_EXPERIENCE = /(\\d{1,2})\\s*\\+?\\s*(?:-\\s*\\d{1,2}\\s*)?(?:ans|ann[ée]es|years?|yrs|jahre)\\b[^.\\n]{0,40}?(exp[ée]rience|experience|erfahrung)/gi;\nconst MAX_JUNIOR_YEARS = 3;\n\nfunction profileRole(keyword) {\n  return String(keyword || '').toLowerCase().replace(/^\\s*junior\\s+/, '').trim();\n}\n\nfunction matchedRoles(title, profile) {\n  const text = String(title || '');\n  if (NOT_A_TECH_ROLE.test(text)) return [];\n  return profile.keywords.filter((kw) => {\n    const role = profileRole(kw);\n    const patterns = ROLE_PATTERNS[role];\n    return patterns ? patterns.some((re) => re.test(text)) : text.toLowerCase().includes(role);\n  });\n}\n\nfunction requiredYears(text) {\n  let max = 0;\n  for (const m of String(text || '').matchAll(YEARS_OF_EXPERIENCE)) {\n    max = Math.max(max, Number(m[1]));\n  }\n  return max;\n}\n\n// 'junior' : la mention est explicite. 'unspecified' : aucune indication.\n// 'senior' : titre senior/lead/architecte..., ou plus de MAX_JUNIOR_YEARS ans\n// d'expérience demandés sans mention junior dans le titre.\nfunction seniority(title, description) {\n  const juniorTitle = JUNIOR_TITLE.test(title || '');\n  if (!juniorTitle && SENIOR_TITLE.test(title || '')) return 'senior';\n  if (juniorTitle) return 'junior';\n  if (requiredYears(description) > MAX_JUNIOR_YEARS) return 'senior';\n  if (JUNIOR_TEXT.test(description || '')) return 'junior';\n  return 'unspecified';\n}\n\n// Liste blanche plutôt que liste noire : une liste des localités hors\n// Romandie n'est jamais complète (Schlieren, Sursee passaient). Une offre\n// est gardée si sa localisation cite un canton romand ou une ville du\n// profil, ou si elle ne précise rien de plus que le pays (bénéfice du doute).\nconst ROMAND_CANTONS = /\\b(ge|vd|ne|fr|vs|ju|gen[èe]ve|geneva|genf|vaud|waadt|neuch[âa]tel|neuenburg|fribourg|freiburg|valais|wallis|jura)\\b/i;\n// Le Haut-Valais est germanophone, même s'il est en \"VS\"/\"Wallis\".\nconst UPPER_VALAIS = /\\b(brig|brigue|visp|vi[èe]ge|zermatt|naters|leuk|loèche)\\b/i;\nconst COUNTRY_ONLY = /\\b(switzerland|suisse|schweiz|svizzera|ch|remote|t[ée]l[ée]travail|hybrid|hybride|kanton|canton)\\b/gi;\n\nconst LOCATION_ALIASES = {\n  'genève': ['genève', 'geneve', 'geneva', 'genf', 'ginevra'],\n  'lausanne': ['lausanne', 'losanna'],\n  'neuchâtel': ['neuchâtel', 'neuchatel', 'neuenburg'],\n  'fribourg': ['fribourg', 'freiburg'],\n  'sion': ['sion', 'sitten'],\n  'delémont': ['delémont', 'delemont', 'delsberg'],\n};\n\nfunction locationMatches(location, profile) {\n  const text = String(location || '').toLowerCase();\n  if (!text) return false;\n  return profile.locations.some((loc) => {\n    const locLower = loc.toLowerCase();\n    return (LOCATION_ALIASES[locLower] || [locLower]).some((alias) => text.includes(alias));\n  });\n}\n\nfunction isRomandieLocation(location, profile) {\n  const text = String(location || '');\n  if (!text.trim()) return true;\n  if (UPPER_VALAIS.test(text)) return false;\n  if (ROMAND_CANTONS.test(text) || locationMatches(text, profile)) return true;\n  return text.replace(COUNTRY_ONLY, '').replace(/[^\\p{L}]/gu, '') === '';\n}\n\n// matchCategory : 'primary' (métier visé + mention junior/stage),\n// 'secondary' (métier visé, séniorité non précisée), 'excluded' sinon.\nfunction classifyListing(listing, profile) {\n  const title = listing.title || '';\n  const extra = listing.raw_extra || {};\n  const description = [extra.description, extra.description_snippet, extra.description_full]\n    .filter((v) => typeof v === 'string').join(' ');\n\n  const roles = matchedRoles(title, profile);\n  const level = seniority(title, description);\n  const inRomandie = isRomandieLocation(listing.location, profile);\n\n  let matchCategory = 'excluded';\n  if (roles.length > 0 && level !== 'senior' && inRomandie) {\n    matchCategory = level === 'junior' ? 'primary' : 'secondary';\n  }\n\n  const matchScore = roles.length * 3\n    + (level === 'junior' ? 2 : 0)\n    + (locationMatches(listing.location, profile) ? 1 : 0);\n\n  return { matchCategory, matchScore, keywordsMatched: roles, seniority: level };\n}\n\n  const profile = $('Loop Over Items').first().json;\n\n  // Une même offre remonte pour plusieurs villes de recherche (Genève et\n  // Lausanne couvrent Nyon) : on ne la garde qu'une fois par source.\n  const seen = new Set();\n  return items\n    // Marqueurs d'erreur des sources, résumés par \"Format Source Error\".\n    .filter(item => !item.json.__sourceError)\n    .map(item => {\n      const target = classifyListing(item.json, profile);\n      return {\n        json: {\n          ...item.json,\n          matchScore: target.matchScore,\n          matchCategory: target.matchCategory,\n          foreignLanguage: detectForeignLanguage(item.json),\n          locationIncomplete: !item.json.location,\n          keywordsMatched: target.keywordsMatched,\n          searchProfileId: profile.id,\n        },\n      };\n    })\n    .filter(item => item.json.matchCategory !== 'excluded')\n    .filter(item => {\n      const key = item.json.source + '|' + item.json.source_id;\n      if (seen.has(key)) return false;\n      seen.add(key);\n      return true;\n    })\n    .sort((a, b) => b.json.matchScore - a.json.matchScore);\n"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -992,6 +992,138 @@
       ],
       "id": "5367cf41-4809-43b6-8ff4-c559a908876a",
       "name": "Expand by city"
+    },
+    {
+      "parameters": {
+        "url": "https://ohws.prospective.ch/public/v1/careercenter/1000936/",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "lang",
+              "value": "=fr"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {}
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        920,
+        1260
+      ],
+      "id": "0ce81339-51ff-420b-b279-29957a98efc4",
+      "name": "SRG SSR Search",
+      "retryOnFail": true,
+      "onError": "continueRegularOutput",
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// --- Copie de n8n/logic/normalize_srg.js (testé dans tests/logic/normalize_srg.test.js) ---\nfunction decodeEntities(s) {\n  return String(s || '')\n    .replace(/&amp;/g, '&')\n    .replace(/&#39;/g, \"'\")\n    .replace(/&quot;/g, '\"')\n    .replace(/&lt;/g, '<')\n    .replace(/&gt;/g, '>')\n    .replace(/\\s+/g, ' ')\n    .trim();\n}\n\nfunction firstMatch(html, pattern) {\n  const m = html.match(pattern);\n  return m ? decodeEntities(m[1]) : null;\n}\n\n// Le \"SRG Career Center\" (prospective.ch) sert en une page HTML toutes les\n// offres du groupe SSR, toutes unités confondues (RTS, SRF, RSI, RTR, SWI,\n// SWISS TXT). Chaque offre est un bloc \"jobContent\" : le logo donne l'unité,\n// le lien son identifiant stable (UUID en fin d'URL), et la ligne <small>\n// \"80-100%, Ecublens\" le taux puis le lieu. Aucune date de publication.\nfunction parseSrgJobs(html) {\n  // Chaque offre est rendue deux fois (bureau et mobile) : on garde la première.\n  const seen = new Set();\n  return String(html || '')\n    .split('jobContent countJobRecords')\n    .slice(1)\n    .map((block) => {\n      const url = firstMatch(block, /href=\"(https:\\/\\/jobs\\.srgssr\\.ch\\/[^\"]+)\"/);\n      const id = url ? url.split('/').pop() : null;\n      if (!id) return null;\n      const unit = firstMatch(block, /class=\"logoSection\"\\s+alt=\"([^\"]*)\"/);\n      const small = firstMatch(block, /<small>([\\s\\S]*?)<\\/small>/) || '';\n      const comma = small.indexOf(',');\n      return {\n        source: 'srgssr.ch',\n        source_id: id,\n        title: firstMatch(block, /<h1>([\\s\\S]*?)<\\/h1>/),\n        company: unit ? unit.toUpperCase() : 'SRG SSR',\n        url,\n        location: (comma === -1 ? small : small.slice(comma + 1)).trim() || null,\n        posted_at: null,\n        raw_extra: {\n          workload: comma === -1 ? null : small.slice(0, comma).trim(),\n          description_snippet: firstMatch(block, /<p>([\\s\\S]*?)<\\/p>/),\n        },\n      };\n    })\n    .filter((job) => job && job.title && !seen.has(job.source_id) && seen.add(job.source_id));\n}\n\n// --- Fin de la copie ---\n\n// \"SRG Career Center\" : toutes les offres du groupe SSR (RTS comprise) en\n// une page HTML, indépendamment du mot-clé — d'où executeOnce sur \"SRG SSR\n// Search\". Le tri par métier, séniorité et lieu est laissé à \"Filter by\n// profile\", comme partout. Une page sans la section \"jobResults\" (erreur\n// HTTP via onError: continueRegularOutput, maintenance) = panne signalée.\nconst html = items[0] && items[0].json ? items[0].json.data : null;\nif (typeof html !== 'string' || !html.includes('jobResults')) {\n  return [{ json: { __sourceError: true, source: 'SRG SSR', message: 'réponse inattendue — ' + JSON.stringify(items[0] && items[0].json).slice(0, 500) } }];\n}\nreturn parseSrgJobs(html).map(job => ({ json: job }));\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1060,
+        1260
+      ],
+      "id": "2474cadc-58f2-4fdb-8349-88ab38a44d4b",
+      "name": "Normalize SRG SSR"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Le flux RSS de Nestlé renvoie 20 offres au plus par requête, sans\n// pagination : une requête par site de Suisse romande (mêmes sites que\n// NESTLE_SITES dans n8n/logic/normalize_nestle.js) plutôt qu'une par\n// mot-clé. Les items reçus (un par mot-clé) ne servent que de déclencheur.\nconst NESTLE_SITES = ['Vevey', 'Lausanne', 'La Tour-de-Peilz', 'Orbe', 'Henniez', 'Avenches', 'Romont', 'Broc'];\nreturn NESTLE_SITES.map(site => ({ json: { nestleSite: site } }));\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        780,
+        1420
+      ],
+      "id": "d32ef805-d2fe-420d-9f75-68f47246f901",
+      "name": "Nestlé sites"
+    },
+    {
+      "parameters": {
+        "url": "https://jobdetails.nestle.com/services/rss/job/",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "locale",
+              "value": "=en_US"
+            },
+            {
+              "name": "keywords",
+              "value": "=({{ $json.nestleSite }})"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          },
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 1000
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        920,
+        1420
+      ],
+      "id": "b4d57f63-f1c5-4d9f-a9ff-ab7e759a0267",
+      "name": "Nestlé Search",
+      "retryOnFail": true,
+      "onError": "continueRegularOutput",
+      "maxTries": 5,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "jsCode": "// --- Copie de n8n/logic/normalize_nestle.js (testé dans tests/logic/normalize_nestle.test.js) ---\n// Sites Nestlé de Suisse romande, avec leur canton : le flux ne donne que\n// \"Orbe, CH\", et sans canton \"Filter by profile\" écarterait les localités qui\n// ne sont pas des villes du profil (Orbe, Henniez, Broc...).\nconst NESTLE_SITES = {\n  Vevey: 'VD',\n  Lausanne: 'VD',\n  'La Tour-de-Peilz': 'VD',\n  Orbe: 'VD',\n  Henniez: 'VD',\n  Avenches: 'VD',\n  Romont: 'FR',\n  Broc: 'FR',\n};\n\nconst MAX_DESCRIPTION_LENGTH = 3000;\n\nfunction cdata(xml, tag) {\n  const m = xml.match(new RegExp('<' + tag + '>(?:<!\\\\[CDATA\\\\[)?([\\\\s\\\\S]*?)(?:\\\\]\\\\]>)?</' + tag + '>'));\n  return m ? m[1] : '';\n}\n\nfunction plainText(html) {\n  return String(html || '')\n    .replace(/<[^>]*>/g, ' ')\n    .replace(/&nbsp;/g, ' ')\n    .replace(/&amp;/g, '&')\n    .replace(/&#39;/g, \"'\")\n    .replace(/&quot;/g, '\"')\n    .replace(/\\s+/g, ' ')\n    .trim();\n}\n\n// Flux RSS public du site carrières (SuccessFactors) : 20 offres au plus par\n// requête et pas de pagination, d'où une requête par site (\"Nestlé sites\").\n// Le titre porte le lieu entre parenthèses : \"Data Analyst (Orbe, CH)\",\n// \"Ingénieur-e Projet (Broc, CH, 1636)\". L'identifiant stable est le dernier\n// segment numérique du lien, dont on retire les paramètres de suivi.\nfunction parseNestleFeed(xml) {\n  return String(xml || '')\n    .split('<item>')\n    .slice(1)\n    .map((item) => {\n      const link = cdata(item, 'link').replace(/&amp;/g, '&').split('?')[0];\n      const id = (link.match(/\\/(\\d+)\\/?$/) || [])[1];\n      if (!id) return null;\n      const rawTitle = plainText(cdata(item, 'title'));\n      const place = (rawTitle.match(/\\(([^()]*)\\)\\s*$/) || [])[1] || null;\n      const city = place ? place.split(',')[0].trim() : null;\n      const canton = NESTLE_SITES[city];\n      // Hors de Suisse, le code pays se confond avec un canton romand\n      // (\"Pontarlier, FR\", \"Tbilisi, GE\") : on ne garde que la ville.\n      const abroad = place && !place.split(',').some((part) => part.trim() === 'CH');\n      const date = new Date(cdata(item, 'pubDate'));\n      return {\n        source: 'nestle.com',\n        source_id: id,\n        title: place ? rawTitle.slice(0, rawTitle.lastIndexOf('(')).trim() : rawTitle,\n        company: 'Nestlé',\n        url: link,\n        location: canton ? city + ', ' + canton : (abroad ? city + ' (étranger)' : place),\n        posted_at: Number.isNaN(date.getTime()) ? null : date.toISOString().slice(0, 10),\n        raw_extra: {\n          description: plainText(cdata(item, 'description')).slice(0, MAX_DESCRIPTION_LENGTH) || null,\n        },\n      };\n    })\n    .filter((job) => job && job.title);\n}\n\n// --- Fin de la copie ---\n\n// Un item par site en entrée. Un item d'erreur HTTP (onError:\n// continueRegularOutput) ou une réponse qui n'est pas un flux RSS ne fait\n// pas jeter les autres sites : leurs offres passent, et un seul marqueur\n// d'erreur (avec le décompte des requêtes échouées) part vers l'alerte\n// email. Le tri par métier, séniorité et lieu est laissé à \"Filter by\n// profile\" : le flux remonte aussi des offres d'autres pays citant le site.\nconst isFeed = item => item.json && typeof item.json.data === 'string' && item.json.data.includes('<rss');\nconst failed = items.filter(item => !isFeed(item));\nconst seen = new Set();\nconst jobs = items\n  .filter(isFeed)\n  .flatMap(item => parseNestleFeed(item.json.data))\n  .filter(job => !seen.has(job.source_id) && seen.add(job.source_id))\n  .map(job => ({ json: job }));\nif (failed.length > 0) {\n  jobs.push({ json: { __sourceError: true, source: 'Nestlé', failed: failed.length, total: items.length,\n    message: JSON.stringify(failed[0].json).slice(0, 500) } });\n}\nreturn jobs;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1060,
+        1420
+      ],
+      "id": "d1751972-d143-419c-9036-dbe3573a64a1",
+      "name": "Normalize Nestlé"
     }
   ],
   "pinData": {},
@@ -1498,6 +1630,16 @@
             "node": "swissdevjobs Search",
             "type": "main",
             "index": 0
+          },
+          {
+            "node": "SRG SSR Search",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Nestlé sites",
+            "type": "main",
+            "index": 0
           }
         ]
       ]
@@ -1535,6 +1677,61 @@
             "node": "Postgres",
             "type": "main",
             "index": 0
+          }
+        ]
+      ]
+    },
+    "SRG SSR Search": {
+      "main": [
+        [
+          {
+            "node": "Normalize SRG SSR",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize SRG SSR": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 9
+          }
+        ]
+      ]
+    },
+    "Nestlé sites": {
+      "main": [
+        [
+          {
+            "node": "Nestlé Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Nestlé Search": {
+      "main": [
+        [
+          {
+            "node": "Normalize Nestlé",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Nestlé": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 10
           }
         ]
       ]

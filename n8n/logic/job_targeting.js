@@ -1,5 +1,6 @@
-// Ciblage du profil : uniquement les trois métiers visés (data, software,
-// devops), uniquement en Suisse romande, et sans les postes seniors.
+// Ciblage du profil : uniquement les métiers visés (data engineer, data
+// analyst, software, devops, support applicatif), uniquement en Suisse
+// romande, et sans les postes seniors.
 // Les sources sont interrogées par métier SANS "junior" (jobs.ch, Genève :
 // 66 offres "data engineer" contre 2 pour "junior data engineer" — la
 // plupart des postes accessibles à un junior ne portent pas la mention), la
@@ -16,6 +17,27 @@ const ROLE_PATTERNS = {
     /\bdata ?ingenieur/i,
     /\bdateningenieur/i,
     /\betl developer/i,
+  ],
+  'data analyst': [
+    /\bdata analyst/i,
+    /\banalyste (de |des |en )?(donn[ée]es|data)\b/i,
+    /\bsp[ée]cialiste (de |des |en )?donn[ée]es\b/i,
+    /\bdata (specialist|sp[ée]cialiste)\b/i,
+    /\b(bi|business intelligence) (analyst|analyste|developer|engineer|specialist)\b/i,
+    // "Reporting Specialist" seul désigne du reporting fiscal ou réglementaire.
+    /\breporting analyst\b/i,
+    /\bdatenanalyst/i,
+  ],
+  // Support et intégration d'applications : "Application Support Specialist",
+  // "Data Production Support", "Administrateur·rice et intégrateur·rice
+  // d'applications". Pas le support bureautique ("IT Support", "Helpdesk").
+  'application support': [
+    /\b(applications?|applicati(f|ve)|production) support\b/i,
+    /\bsupport (applicatif|d'applications?|de production)\b/i,
+    /\b(administrat|int[ée]grat)(eur|rice)[^,(]{0,40}\bapplications?\b/i,
+    /\bapplication (engineer|administrator|integrator|specialist)\b/i,
+    /\bing[ée]nieur(e|\(e\)|·e)? (d'application|applicatif|en int[ée]gration|d'int[ée]gration)/i,
+    /\bintegration engineer\b/i,
   ],
   'software engineer': [
     /\bsoftware (engineer|developer|entwickler)/i,

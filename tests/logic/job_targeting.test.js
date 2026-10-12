@@ -82,3 +82,37 @@ test('classifyListing: senior, off-target or out-of-Romandie listings are exclud
   assert.equal(classifyListing(listing('Data Analyst Junior'), profile).matchCategory, 'excluded');
   assert.equal(classifyListing(listing('Junior Data Engineer', 'Zürich'), profile).matchCategory, 'excluded');
 });
+
+const WIDE_PROFILE = {
+  keywords: ['junior data engineer', 'junior data analyst', 'junior application support'],
+  locations: ['Lausanne', 'Genève', 'Gland'],
+};
+
+test('matches data analyst titles in French and English', () => {
+  for (const title of ['Data Analyst (H/F/X)', 'Analyste de données (Data Analyst) à 80%', 'CDD Premier Emploi - Spécialiste des données',
+    'BI Developer', 'Reporting Analyst', 'Junior Data Analyst – Medical Platform Operations']) {
+    assert.deepEqual(matchedRoles(title, WIDE_PROFILE), ['junior data analyst'], title);
+  }
+  for (const title of ['Financial Analyst', 'Quality Control Analyst (h/f/d)', 'LPG Analyst', 'Master Data Administrator', 'Tax Reporting Specialist (80-100%)']) {
+    assert.deepEqual(matchedRoles(title, WIDE_PROFILE), [], title);
+  }
+});
+
+test('matches application support and integration titles, not desktop support', () => {
+  for (const title of ['Application Support Specialist - Front Office (6-month contract)', "Administrateur·rice et intégrateur·rice d'applications",
+    'Junior Data Production & Support Engineer'.replace(' & ', ' '), 'Ingénieur support applicatif', 'Application Engineer Python']) {
+    assert.deepEqual(matchedRoles(title, WIDE_PROFILE), ['junior application support'], title);
+  }
+  for (const title of ['IT Support Engineer', 'Customer Care Representative', 'Spécialiste support client', 'Administrateur systèmes']) {
+    assert.deepEqual(matchedRoles(title, WIDE_PROFILE), [], title);
+  }
+});
+
+test('keeps an application administrator asking for two years of experience', () => {
+  const listing = {
+    title: "Administrateur·rice et intégrateur·rice d'applications",
+    location: 'Lausanne, VD',
+    raw_extra: { description: 'Expérience pratique de 2 ans au minimum dans une fonction similaire' },
+  };
+  assert.equal(classifyListing(listing, WIDE_PROFILE).matchCategory, 'secondary');
+});
