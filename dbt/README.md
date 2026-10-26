@@ -12,7 +12,8 @@ seeds skills, canton_aliases ──>├─ stg_job_listings      une ligne par a
                                 ├─ int_offers            une ligne par offre réelle (multi-sources)
                                 ├─ int_offer_skills      compétences citées par offre
                                 └─ marts : skill_demand, skill_demand_weekly,
-                                           listings_by_source_weekly, top_hiring_companies
+                                           listings_by_source_weekly, top_hiring_companies,
+                                           description_coverage
 ```
 
 ## Pourquoi un snapshot
@@ -38,7 +39,10 @@ Le snapshot écrit toujours dans `snapshots`, quelle que soit la cible (macro
 
 ## Limites connues
 
-- La plupart des sources n'exposent qu'un extrait de description : environ 70 % des offres
-  ne citent aucune compétence du seed. Les parts de `skill_demand` sont des minimums.
+- Les compétences sont cherchées dans la description complète quand le workflow
+  Enrich Descriptions a pu la lire, sinon dans l'extrait de la recherche : environ 43 % des
+  offres ne citent encore aucune compétence du seed (surtout Jooble et Adzuna, dont les pages
+  sont inaccessibles). Les parts de `skill_demand` sont des minimums ; `description_coverage`
+  montre la couverture par source.
 - Certaines « entreprises » sont des plateformes (jobup, Job-Room) quand la source ne
   donne pas l'employeur réel.
