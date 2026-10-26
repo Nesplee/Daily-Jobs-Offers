@@ -41,4 +41,17 @@ else
   exit 1
 fi
 
+# A description fetched by enrich_descriptions survives the next search pass,
+# which sends description_full: null for sources without a full text.
+$PSQL_EXEC -c "UPDATE job_listings SET raw_extra = raw_extra || '{\"description_full\":\"Texte complet\"}' WHERE source = 'test-upsert';" > /dev/null
+run_upsert '{"contract_type":"CDD","description_full":null}' > /tmp/upsert_3.out
+full=$(docker compose exec -T db psql -U "${POSTGRES_ADMIN_USER}" -d "${POSTGRES_DB}" -tAc \
+  "SELECT raw_extra->>'description_full' FROM job_listings WHERE source = 'test-upsert';")
+if [ "$full" = "Texte complet" ]; then
+  echo "PASS: a null description_full from the search does not erase the fetched one"
+else
+  echo "FAIL: expected description_full kept, got '${full}'"
+  exit 1
+fi
+
 $PSQL_EXEC -c "DELETE FROM job_listings WHERE source = 'test-upsert';"

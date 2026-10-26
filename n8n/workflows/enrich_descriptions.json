@@ -1,0 +1,357 @@
+{
+  "name": "Enrich Descriptions",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "30 8 * * 1-5"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "f343e253-69f4-4d1a-8376-5a94d1f5526e",
+      "name": "Daily 8:30"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        200
+      ],
+      "id": "dae751b1-6842-4dc9-83f3-dc84174ec1fc",
+      "name": "Manual run"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Descriptions complètes sans page de détail accessible.\n--\n-- 1. Indeed : l'acteur Apify renvoie déjà la description entière, rangée\n--    dans description_snippet par la normalisation.\nUPDATE job_listings\nSET raw_extra = raw_extra || jsonb_build_object(\n  'description_full', raw_extra->>'description_snippet',\n  'description_source', 'search',\n  'description_fetched_at', now())\nWHERE source = 'indeed.ch'\n  AND coalesce(raw_extra->>'description_full', '') = ''\n  AND length(raw_extra->>'description_snippet') >= 200;\n\n-- 2. Jooble, Adzuna, et toute annonce dont la page n'a rien donné après\n--    3 essais (select_pending_descriptions.sql) : la\n--    description d'une autre annonce de la MÊME offre, reconnue avec les\n--    règles du digest (select_digest_offers.sql) : employeur normalisé égal\n--    par préfixe et intitulé similaire (trigramme >= 0.7), ou intitulé\n--    identique et spécifique quand l'employeur est inconnu ou un portail.\n--    Seule une description lue sur une page (detail_page, search) est\n--    prêtée, jamais une description elle-même empruntée.\nWITH candidates AS (\n  SELECT id, source, raw_extra, dedup_company(company) AS d_company, dedup_title(title) AS d_title\n  FROM job_listings\n), donor AS (\n  SELECT DISTINCT ON (a.id) a.id, b.source, b.raw_extra->>'description_full' AS description\n  FROM candidates a\n  JOIN candidates b\n    ON b.id <> a.id\n   AND coalesce(b.raw_extra->>'description_full', '') <> ''\n   AND b.raw_extra->>'description_source' IN ('detail_page', 'search')\n   AND (\n     ((b.d_company LIKE a.d_company || '%' OR a.d_company LIKE b.d_company || '%')\n      AND similarity(a.d_title, b.d_title) >= 0.7)\n     OR (a.d_title = b.d_title AND length(a.d_title) >= 20\n         AND (a.d_company IS NULL OR b.d_company IS NULL\n              OR a.d_company IN ('jobroom', 'jobup') OR b.d_company IN ('jobroom', 'jobup')))\n   )\n  WHERE coalesce(a.raw_extra->>'description_full', '') = ''\n    -- Une annonce dont la propre page reste à lire attend son tour : sa\n    -- description vaut mieux que celle d'un doublon.\n    AND (a.source NOT IN ('linkedin.com', 'job-room.ch', 'cern.ch', 'jobs.ch', 'jobup.ch', 'srgssr.ch', 'nestle.com')\n         OR coalesce((a.raw_extra->>'description_fetch_attempts')::int, 0) >= 3)\n  ORDER BY a.id, similarity(a.d_title, b.d_title) DESC, length(b.raw_extra->>'description_full') DESC\n)\nUPDATE job_listings j\nSET raw_extra = j.raw_extra || jsonb_build_object(\n  'description_full', d.description,\n  'description_source', 'duplicate:' || d.source,\n  'description_fetched_at', now())\nFROM donor d\nWHERE j.id = d.id;\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        240,
+        100
+      ],
+      "id": "3d5cc9ad-74ef-4356-85d6-91a040f1e630",
+      "name": "Borrow before fetch",
+      "credentials": {
+        "postgres": {
+          "id": "zIIUfintNuifHQcc",
+          "name": "annonces db"
+        }
+      },
+      "alwaysOutputData": true,
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Annonces dont la description complète reste à récupérer sur la page de\n-- détail (workflow enrich_descriptions). Jooble, Adzuna (403 hors\n-- navigateur) et Indeed (déjà complet) n'en ont pas : voir\n-- borrow_duplicate_descriptions.sql. Trois essais au plus par annonce, pour\n-- qu'une offre retirée (404) ne soit pas redemandée chaque jour.\nSELECT id, source, source_id, url\nFROM job_listings\nWHERE coalesce(raw_extra->>'description_full', '') = ''\n  AND source IN ('linkedin.com', 'job-room.ch', 'cern.ch', 'jobs.ch', 'jobup.ch', 'srgssr.ch', 'nestle.com')\n  AND coalesce((raw_extra->>'description_fetch_attempts')::int, 0) < 3\nORDER BY created_at DESC\nLIMIT 200;\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        480,
+        100
+      ],
+      "id": "11589d18-9316-4bd8-99f3-97f9cc53154d",
+      "name": "Pending listings",
+      "credentials": {
+        "postgres": {
+          "id": "zIIUfintNuifHQcc",
+          "name": "annonces db"
+        }
+      },
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Description complète d'une annonce, lue sur sa page de détail : les\n// recherches de toutes les sources ne renvoient qu'un extrait (ou rien pour\n// LinkedIn, CERN et swissdevjobs). Utilisé par le workflow enrich_descriptions.\n// Le texte est gardé dans sa langue d'origine : le quota gratuit DeepL ne\n// tiendrait pas 3 jours avec des descriptions complètes.\n\nconst MAX_LENGTH = 20000;\n// En dessous, ce n'est pas une description mais une accroche (\"Nous\n// recherchons un(e) Développeur/euse 1 pour rejoindre notre équipe.\").\nconst MIN_LENGTH = 200;\n\nconst ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '\"', apos: \"'\", nbsp: ' ' };\n\nfunction decodeEntities(s) {\n  return String(s || '').replace(/&(#x[0-9a-f]+|#\\d+|[a-z]+);/gi, (m, code) => {\n    if (code[0] === '#') {\n      const n = code[1] === 'x' || code[1] === 'X' ? parseInt(code.slice(2), 16) : parseInt(code.slice(1), 10);\n      return Number.isNaN(n) ? m : String.fromCodePoint(n);\n    }\n    return ENTITIES[code.toLowerCase()] ?? m;\n  });\n}\n\n// HTML -> texte lisible : les blocs et les <br> deviennent des retours à la\n// ligne, les puces des \"- \", le reste des balises disparaît.\nfunction htmlToText(html) {\n  const text = decodeEntities(\n    String(html || '')\n      .replace(/<(script|style)[^>]*>[\\s\\S]*?<\\/\\1>/gi, ' ')\n      .replace(/<li[^>]*>/gi, '\\n- ')\n      .replace(/<br\\s*\\/?>/gi, '\\n')\n      .replace(/<\\/(p|div|ul|ol|h[1-6]|tr|section)>/gi, '\\n')\n      .replace(/<[^>]+>/g, ' '),\n  );\n  return text\n    .split('\\n')\n    .map((line) => line.replace(/[ \\t ]+/g, ' ').trim())\n    .join('\\n')\n    .replace(/\\n{3,}/g, '\\n\\n')\n    .trim();\n}\n\nfunction finish(text) {\n  const clean = (text || '').trim();\n  if (clean.length < MIN_LENGTH) return null;\n  return clean.length > MAX_LENGTH ? clean.slice(0, MAX_LENGTH).trim() : clean;\n}\n\n// URL de la page (ou de l'API) de détail, null si la source n'en a pas\n// d'accessible : Jooble et Adzuna répondent 403 à toute requête hors\n// navigateur, Indeed donne déjà la description complète.\nfunction detailUrl(listing) {\n  const id = encodeURIComponent(String(listing.source_id || ''));\n  switch (listing.source) {\n    case 'linkedin.com':\n      return `https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/${id}`;\n    case 'job-room.ch':\n      return `https://www.job-room.ch/jobadservice/api/jobAdvertisements/${id}`;\n    case 'cern.ch':\n      return `https://api.smartrecruiters.com/v1/companies/CERN/postings/${id}`;\n    case 'jobs.ch':\n    case 'jobup.ch':\n    case 'srgssr.ch':\n    case 'nestle.com':\n      return listing.url || null;\n    default:\n      return null;\n  }\n}\n\nfunction fromLinkedin(html) {\n  const start = html.search(/<div class=\"show-more-less-html__markup/);\n  if (start === -1) return null;\n  const end = html.indexOf('<button class=\"show-more-less-html__button', start);\n  const block = html.slice(start, end === -1 ? undefined : end);\n  return htmlToText(block.slice(block.indexOf('>') + 1));\n}\n\nfunction fromJobRoom(body) {\n  const ad = typeof body === 'string' ? JSON.parse(body) : body;\n  const descriptions = ((ad && ad.jobContent) || {}).jobDescriptions || [];\n  // Toutes les langues publiées, français d'abord : une annonce bilingue\n  // garde ainsi ses deux versions plutôt qu'une seule au hasard.\n  const ordered = [...descriptions].sort((a, b) => (b.languageIsoCode === 'fr') - (a.languageIsoCode === 'fr'));\n  return ordered.map((d) => htmlToText(d.description)).filter(Boolean).join('\\n\\n');\n}\n\nfunction fromSmartRecruiters(body) {\n  const posting = typeof body === 'string' ? JSON.parse(body) : body;\n  const sections = ((posting && posting.jobAd) || {}).sections || {};\n  return ['jobDescription', 'qualifications', 'additionalInformation', 'companyDescription']\n    .map((key) => sections[key])\n    .filter((s) => s && s.text)\n    .map((s) => [s.title, htmlToText(s.text)].filter(Boolean).join('\\n'))\n    .join('\\n\\n');\n}\n\nfunction jobPostingFromJsonLd(html) {\n  const blocks = html.match(/<script[^>]*application\\/ld\\+json[^>]*>[\\s\\S]*?<\\/script>/gi) || [];\n  for (const block of blocks) {\n    let data;\n    try {\n      data = JSON.parse(block.replace(/^<script[^>]*>/i, '').replace(/<\\/script>$/i, ''));\n    } catch (e) {\n      continue;\n    }\n    const nodes = Array.isArray(data) ? data : data['@graph'] || [data];\n    const posting = nodes.find((n) => n && n['@type'] === 'JobPosting');\n    if (posting) return posting;\n  }\n  return null;\n}\n\n// jobs.ch, jobup.ch, SRG SSR, Nestlé : le JobPosting schema.org que ces\n// sites publient pour le référencement. SRG met tâches et profil dans des\n// champs à part, ajoutés s'ils ne sont pas déjà dans la description.\nfunction fromJsonLd(html) {\n  const posting = jobPostingFromJsonLd(html);\n  // Offre expirée : jobs.ch et jobup.ch redirigent vers la liste de sa\n  // catégorie (HTTP 200), qui ne publie qu'un ItemList d'autres offres.\n  if (!posting) return /\"@type\"\\s*:\\s*\"ItemList\"/.test(html) ? { expired: true } : null;\n  const description = htmlToText(posting.description);\n  const extras = ['responsibilities', 'qualifications', 'skills', 'jobBenefits']\n    .map((key) => (typeof posting[key] === 'string' ? htmlToText(posting[key]) : ''))\n    .filter((text) => text && !description.includes(text.slice(0, 80)));\n  return [description, ...extras].filter(Boolean).join('\\n\\n');\n}\n\n// Renvoie { text } ou { error } : une page qui a changé de structure doit se\n// voir dans les compteurs d'erreurs, pas passer pour une offre sans texte.\nfunction extractDescription(source, body) {\n  let text;\n  try {\n    switch (source) {\n      case 'linkedin.com':\n        text = fromLinkedin(String(body || ''));\n        break;\n      case 'job-room.ch':\n        text = fromJobRoom(body);\n        break;\n      case 'cern.ch':\n        text = fromSmartRecruiters(body);\n        break;\n      case 'jobs.ch':\n      case 'jobup.ch':\n      case 'srgssr.ch':\n      case 'nestle.com':\n        text = fromJsonLd(String(body || ''));\n        break;\n      default:\n        return { error: 'source sans page de détail' };\n    }\n  } catch (e) {\n    return { error: `réponse illisible : ${e.message}`.slice(0, 200) };\n  }\n  if (text && text.expired) return { error: 'offre retirée (redirigée vers une liste)' };\n  const result = finish(text);\n  return result ? { text: result } : { error: text ? 'description trop courte' : 'description introuvable dans la page' };\n}\n\n\n// Une requête par annonce dont la source a une page de détail joignable.\nreturn $input.all()\n  .map((item) => ({ json: { ...item.json, detail_url: detailUrl(item.json) } }))\n  .filter((item) => item.json.id && item.json.detail_url);\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        100
+      ],
+      "id": "8f48cf82-64e3-4779-af48-57257dd01c59",
+      "name": "Build request"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.detail_url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36"
+            },
+            {
+              "name": "Accept-Language",
+              "value": "fr-CH,fr;q=0.9,en;q=0.8"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          },
+          "timeout": 20000,
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 5000
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        960,
+        100
+      ],
+      "id": "545cb5f6-a0e9-468d-bb83-ceaa934ab2a9",
+      "name": "Fetch detail",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Description complète d'une annonce, lue sur sa page de détail : les\n// recherches de toutes les sources ne renvoient qu'un extrait (ou rien pour\n// LinkedIn, CERN et swissdevjobs). Utilisé par le workflow enrich_descriptions.\n// Le texte est gardé dans sa langue d'origine : le quota gratuit DeepL ne\n// tiendrait pas 3 jours avec des descriptions complètes.\n\nconst MAX_LENGTH = 20000;\n// En dessous, ce n'est pas une description mais une accroche (\"Nous\n// recherchons un(e) Développeur/euse 1 pour rejoindre notre équipe.\").\nconst MIN_LENGTH = 200;\n\nconst ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '\"', apos: \"'\", nbsp: ' ' };\n\nfunction decodeEntities(s) {\n  return String(s || '').replace(/&(#x[0-9a-f]+|#\\d+|[a-z]+);/gi, (m, code) => {\n    if (code[0] === '#') {\n      const n = code[1] === 'x' || code[1] === 'X' ? parseInt(code.slice(2), 16) : parseInt(code.slice(1), 10);\n      return Number.isNaN(n) ? m : String.fromCodePoint(n);\n    }\n    return ENTITIES[code.toLowerCase()] ?? m;\n  });\n}\n\n// HTML -> texte lisible : les blocs et les <br> deviennent des retours à la\n// ligne, les puces des \"- \", le reste des balises disparaît.\nfunction htmlToText(html) {\n  const text = decodeEntities(\n    String(html || '')\n      .replace(/<(script|style)[^>]*>[\\s\\S]*?<\\/\\1>/gi, ' ')\n      .replace(/<li[^>]*>/gi, '\\n- ')\n      .replace(/<br\\s*\\/?>/gi, '\\n')\n      .replace(/<\\/(p|div|ul|ol|h[1-6]|tr|section)>/gi, '\\n')\n      .replace(/<[^>]+>/g, ' '),\n  );\n  return text\n    .split('\\n')\n    .map((line) => line.replace(/[ \\t ]+/g, ' ').trim())\n    .join('\\n')\n    .replace(/\\n{3,}/g, '\\n\\n')\n    .trim();\n}\n\nfunction finish(text) {\n  const clean = (text || '').trim();\n  if (clean.length < MIN_LENGTH) return null;\n  return clean.length > MAX_LENGTH ? clean.slice(0, MAX_LENGTH).trim() : clean;\n}\n\n// URL de la page (ou de l'API) de détail, null si la source n'en a pas\n// d'accessible : Jooble et Adzuna répondent 403 à toute requête hors\n// navigateur, Indeed donne déjà la description complète.\nfunction detailUrl(listing) {\n  const id = encodeURIComponent(String(listing.source_id || ''));\n  switch (listing.source) {\n    case 'linkedin.com':\n      return `https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/${id}`;\n    case 'job-room.ch':\n      return `https://www.job-room.ch/jobadservice/api/jobAdvertisements/${id}`;\n    case 'cern.ch':\n      return `https://api.smartrecruiters.com/v1/companies/CERN/postings/${id}`;\n    case 'jobs.ch':\n    case 'jobup.ch':\n    case 'srgssr.ch':\n    case 'nestle.com':\n      return listing.url || null;\n    default:\n      return null;\n  }\n}\n\nfunction fromLinkedin(html) {\n  const start = html.search(/<div class=\"show-more-less-html__markup/);\n  if (start === -1) return null;\n  const end = html.indexOf('<button class=\"show-more-less-html__button', start);\n  const block = html.slice(start, end === -1 ? undefined : end);\n  return htmlToText(block.slice(block.indexOf('>') + 1));\n}\n\nfunction fromJobRoom(body) {\n  const ad = typeof body === 'string' ? JSON.parse(body) : body;\n  const descriptions = ((ad && ad.jobContent) || {}).jobDescriptions || [];\n  // Toutes les langues publiées, français d'abord : une annonce bilingue\n  // garde ainsi ses deux versions plutôt qu'une seule au hasard.\n  const ordered = [...descriptions].sort((a, b) => (b.languageIsoCode === 'fr') - (a.languageIsoCode === 'fr'));\n  return ordered.map((d) => htmlToText(d.description)).filter(Boolean).join('\\n\\n');\n}\n\nfunction fromSmartRecruiters(body) {\n  const posting = typeof body === 'string' ? JSON.parse(body) : body;\n  const sections = ((posting && posting.jobAd) || {}).sections || {};\n  return ['jobDescription', 'qualifications', 'additionalInformation', 'companyDescription']\n    .map((key) => sections[key])\n    .filter((s) => s && s.text)\n    .map((s) => [s.title, htmlToText(s.text)].filter(Boolean).join('\\n'))\n    .join('\\n\\n');\n}\n\nfunction jobPostingFromJsonLd(html) {\n  const blocks = html.match(/<script[^>]*application\\/ld\\+json[^>]*>[\\s\\S]*?<\\/script>/gi) || [];\n  for (const block of blocks) {\n    let data;\n    try {\n      data = JSON.parse(block.replace(/^<script[^>]*>/i, '').replace(/<\\/script>$/i, ''));\n    } catch (e) {\n      continue;\n    }\n    const nodes = Array.isArray(data) ? data : data['@graph'] || [data];\n    const posting = nodes.find((n) => n && n['@type'] === 'JobPosting');\n    if (posting) return posting;\n  }\n  return null;\n}\n\n// jobs.ch, jobup.ch, SRG SSR, Nestlé : le JobPosting schema.org que ces\n// sites publient pour le référencement. SRG met tâches et profil dans des\n// champs à part, ajoutés s'ils ne sont pas déjà dans la description.\nfunction fromJsonLd(html) {\n  const posting = jobPostingFromJsonLd(html);\n  // Offre expirée : jobs.ch et jobup.ch redirigent vers la liste de sa\n  // catégorie (HTTP 200), qui ne publie qu'un ItemList d'autres offres.\n  if (!posting) return /\"@type\"\\s*:\\s*\"ItemList\"/.test(html) ? { expired: true } : null;\n  const description = htmlToText(posting.description);\n  const extras = ['responsibilities', 'qualifications', 'skills', 'jobBenefits']\n    .map((key) => (typeof posting[key] === 'string' ? htmlToText(posting[key]) : ''))\n    .filter((text) => text && !description.includes(text.slice(0, 80)));\n  return [description, ...extras].filter(Boolean).join('\\n\\n');\n}\n\n// Renvoie { text } ou { error } : une page qui a changé de structure doit se\n// voir dans les compteurs d'erreurs, pas passer pour une offre sans texte.\nfunction extractDescription(source, body) {\n  let text;\n  try {\n    switch (source) {\n      case 'linkedin.com':\n        text = fromLinkedin(String(body || ''));\n        break;\n      case 'job-room.ch':\n        text = fromJobRoom(body);\n        break;\n      case 'cern.ch':\n        text = fromSmartRecruiters(body);\n        break;\n      case 'jobs.ch':\n      case 'jobup.ch':\n      case 'srgssr.ch':\n      case 'nestle.com':\n        text = fromJsonLd(String(body || ''));\n        break;\n      default:\n        return { error: 'source sans page de détail' };\n    }\n  } catch (e) {\n    return { error: `réponse illisible : ${e.message}`.slice(0, 200) };\n  }\n  if (text && text.expired) return { error: 'offre retirée (redirigée vers une liste)' };\n  const result = finish(text);\n  return result ? { text: result } : { error: text ? 'description trop courte' : 'description introuvable dans la page' };\n}\n\n\n// Une réponse en erreur (403, 404, délai) arrive ici grâce à\n// onError=continueRegularOutput sur \"Fetch detail\" : elle compte comme un\n// essai raté au lieu d'arrêter le lot.\nconst listing = $('Build request').item.json;\nconst response = $json;\nif (response.error) {\n  const e = response.error;\n  // Le message d'erreur de n8n recopie le corps de la réponse : on ne garde\n  // le texte que s'il n'est pas une page HTML (404 jobs.ch, 410 jobup.ch).\n  const message = /<!doctype|<html/i.test(e.message || '') ? '' : (e.message || '');\n  const reason = `HTTP ${e.httpCode || e.status || '?'} ${message}`.replace(/\\s+/g, ' ').trim().slice(0, 200);\n  return { json: { id: listing.id, source: listing.source, text: null, error: reason } };\n}\nconst result = extractDescription(listing.source, response.data);\nreturn { json: { id: listing.id, source: listing.source, text: result.text || null, error: result.error || null } };\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        100
+      ],
+      "id": "8e0f48a2-f5e2-46e7-b7fd-7565ef43bdcc",
+      "name": "Extract description"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Résultat de la récupération d'une description. Paramètres, dans l'ordre :\n-- texte (ou NULL), erreur (ou NULL), id de l'annonce. Pas de \"dollar-numéro\"\n-- dans ce commentaire : n8n substitue les paramètres partout dans la requête,\n-- commentaires compris. Succès : description_full et sa provenance. Échec :\n-- un essai de plus et la raison, visible dans la base pour diagnostiquer une\n-- source dont la page a changé.\nUPDATE job_listings\nSET raw_extra = CASE\n  WHEN $1::text IS NOT NULL THEN\n    (raw_extra - 'description_fetch_error') || jsonb_build_object(\n      'description_full', $1::text,\n      'description_source', 'detail_page',\n      'description_fetched_at', now())\n  ELSE\n    raw_extra || jsonb_build_object(\n      'description_fetch_attempts', coalesce((raw_extra->>'description_fetch_attempts')::int, 0) + 1,\n      'description_fetch_error', $2::text,\n      'description_fetched_at', now())\n  END\nWHERE id = $3::uuid;\n",
+        "options": {
+          "queryReplacement": "={{ [$json.text, $json.error, $json.id] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1440,
+        100
+      ],
+      "id": "27faef7a-4845-4415-9b99-b8c0fac6bb5d",
+      "name": "Save description",
+      "credentials": {
+        "postgres": {
+          "id": "zIIUfintNuifHQcc",
+          "name": "annonces db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Descriptions complètes sans page de détail accessible.\n--\n-- 1. Indeed : l'acteur Apify renvoie déjà la description entière, rangée\n--    dans description_snippet par la normalisation.\nUPDATE job_listings\nSET raw_extra = raw_extra || jsonb_build_object(\n  'description_full', raw_extra->>'description_snippet',\n  'description_source', 'search',\n  'description_fetched_at', now())\nWHERE source = 'indeed.ch'\n  AND coalesce(raw_extra->>'description_full', '') = ''\n  AND length(raw_extra->>'description_snippet') >= 200;\n\n-- 2. Jooble, Adzuna, et toute annonce dont la page n'a rien donné après\n--    3 essais (select_pending_descriptions.sql) : la\n--    description d'une autre annonce de la MÊME offre, reconnue avec les\n--    règles du digest (select_digest_offers.sql) : employeur normalisé égal\n--    par préfixe et intitulé similaire (trigramme >= 0.7), ou intitulé\n--    identique et spécifique quand l'employeur est inconnu ou un portail.\n--    Seule une description lue sur une page (detail_page, search) est\n--    prêtée, jamais une description elle-même empruntée.\nWITH candidates AS (\n  SELECT id, source, raw_extra, dedup_company(company) AS d_company, dedup_title(title) AS d_title\n  FROM job_listings\n), donor AS (\n  SELECT DISTINCT ON (a.id) a.id, b.source, b.raw_extra->>'description_full' AS description\n  FROM candidates a\n  JOIN candidates b\n    ON b.id <> a.id\n   AND coalesce(b.raw_extra->>'description_full', '') <> ''\n   AND b.raw_extra->>'description_source' IN ('detail_page', 'search')\n   AND (\n     ((b.d_company LIKE a.d_company || '%' OR a.d_company LIKE b.d_company || '%')\n      AND similarity(a.d_title, b.d_title) >= 0.7)\n     OR (a.d_title = b.d_title AND length(a.d_title) >= 20\n         AND (a.d_company IS NULL OR b.d_company IS NULL\n              OR a.d_company IN ('jobroom', 'jobup') OR b.d_company IN ('jobroom', 'jobup')))\n   )\n  WHERE coalesce(a.raw_extra->>'description_full', '') = ''\n    -- Une annonce dont la propre page reste à lire attend son tour : sa\n    -- description vaut mieux que celle d'un doublon.\n    AND (a.source NOT IN ('linkedin.com', 'job-room.ch', 'cern.ch', 'jobs.ch', 'jobup.ch', 'srgssr.ch', 'nestle.com')\n         OR coalesce((a.raw_extra->>'description_fetch_attempts')::int, 0) >= 3)\n  ORDER BY a.id, similarity(a.d_title, b.d_title) DESC, length(b.raw_extra->>'description_full') DESC\n)\nUPDATE job_listings j\nSET raw_extra = j.raw_extra || jsonb_build_object(\n  'description_full', d.description,\n  'description_source', 'duplicate:' || d.source,\n  'description_fetched_at', now())\nFROM donor d\nWHERE j.id = d.id;\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1680,
+        100
+      ],
+      "id": "d78636a8-e72a-49a0-a283-b59f3e8faec1",
+      "name": "Borrow after fetch",
+      "credentials": {
+        "postgres": {
+          "id": "zIIUfintNuifHQcc",
+          "name": "annonces db"
+        }
+      },
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Alerte si une source n'a donné AUCUNE description sur au moins 3\n// essais : sa page a probablement changé de structure, ou elle bloque.\nconst bySource = {};\nfor (const item of $('Extract description').all()) {\n  const s = (bySource[item.json.source] ||= { ok: 0, failed: 0, errors: {} });\n  if (item.json.text) s.ok += 1;\n  else {\n    s.failed += 1;\n    s.errors[item.json.error] = (s.errors[item.json.error] || 0) + 1;\n  }\n}\nconst broken = Object.entries(bySource).filter(([, s]) => s.ok === 0 && s.failed >= 3);\nif (broken.length === 0) return [];\nconst esc = (t) => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;');\nconst lines = broken.map(([source, s]) => {\n  const top = Object.entries(s.errors).sort((a, b) => b[1] - a[1])[0];\n  return `<li><b>${esc(source)}</b> : 0 description sur ${s.failed} essais (${esc(top[0])}, ${top[1]}×)</li>`;\n});\nreturn [{ json: {\n  subject: `Descriptions : ${broken.map(([s]) => s).join(', ')} en échec`,\n  html: `<p>Le workflow enrich_descriptions n'a récupéré aucune description pour :</p><ul>${lines.join('')}</ul>`\n    + '<p>Détail par annonce : raw_extra->>\\'description_fetch_error\\' dans job_listings.</p>',\n} }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1920,
+        100
+      ],
+      "id": "22c262db-fa66-4607-bb43-9513f89fb3d7",
+      "name": "Fetch report"
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $env.DIGEST_EMAIL }}",
+        "toEmail": "={{ $env.DIGEST_EMAIL }}",
+        "subject": "={{ $json.subject }}",
+        "html": "={{ $json.html }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        2160,
+        100
+      ],
+      "id": "c0627807-36dd-4f58-800a-727bb94277d0",
+      "name": "Send Error Alert",
+      "credentials": {
+        "smtp": {
+          "id": "z5UyWirLbWwy43ph",
+          "name": "SMTP account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Daily 8:30": {
+      "main": [
+        [
+          {
+            "node": "Borrow before fetch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual run": {
+      "main": [
+        [
+          {
+            "node": "Borrow before fetch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Borrow before fetch": {
+      "main": [
+        [
+          {
+            "node": "Pending listings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pending listings": {
+      "main": [
+        [
+          {
+            "node": "Build request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build request": {
+      "main": [
+        [
+          {
+            "node": "Fetch detail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch detail": {
+      "main": [
+        [
+          {
+            "node": "Extract description",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract description": {
+      "main": [
+        [
+          {
+            "node": "Save description",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save description": {
+      "main": [
+        [
+          {
+            "node": "Borrow after fetch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Borrow after fetch": {
+      "main": [
+        [
+          {
+            "node": "Fetch report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch report": {
+      "main": [
+        [
+          {
+            "node": "Send Error Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "id": "3VqT56KkfmPMZwca",
+  "meta": {
+    "instanceId": "0dbb1e602ea106585e16092042137fd67137f34bcde26e9a2299aae124476647"
+  },
+  "tags": []
+}

@@ -11,7 +11,12 @@ ON CONFLICT (source, source_id) DO UPDATE SET
   last_checked_at = now(),
   -- Fusion et non remplacement : une offre déjà connue repasse sans être
   -- retraduite, ses clés title_original et description_fr doivent survivre.
-  raw_extra = job_listings.raw_extra || EXCLUDED.raw_extra,
+  -- description_full vient du workflow enrich_descriptions : un null renvoyé
+  -- par la recherche (Jooble, Adzuna) ne doit pas l'effacer.
+  raw_extra = job_listings.raw_extra || CASE
+    WHEN EXCLUDED.raw_extra->>'description_full' IS NULL THEN EXCLUDED.raw_extra - 'description_full'
+    ELSE EXCLUDED.raw_extra
+  END,
   match_score = EXCLUDED.match_score,
   match_category = EXCLUDED.match_category,
   location_incomplete = EXCLUDED.location_incomplete,
