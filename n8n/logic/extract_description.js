@@ -62,6 +62,7 @@ function detailUrl(listing) {
     case 'jobup.ch':
     case 'srgssr.ch':
     case 'nestle.com':
+    case 'swissdevjobs.ch':
       return listing.url || null;
     default:
       return null;
@@ -111,6 +112,30 @@ function jobPostingFromJsonLd(html) {
   return null;
 }
 
+// swissdevjobs.ch est une application JavaScript, mais la page d'une offre
+// embarque l'offre complète dans window.__detailedJob : description, tâches
+// et exigences en texte brut (listes en "- "), technologies à part.
+function fromSwissDevJobs(html) {
+  const start = html.indexOf('window.__detailedJob =');
+  if (start === -1) return null;
+  const end = html.indexOf('</script>', start);
+  const job = JSON.parse(html.slice(start + 'window.__detailedJob ='.length, end).trim().replace(/;$/, ''));
+  // Offre retirée : la page garde l'URL mais l'objet devient la chaîne
+  // "JOB_PLACEHOLDER" (ou l'URL redirige vers une liste qui en a autant).
+  if (!job || typeof job !== 'object' || job.isDisabledOrOutdated) return { expired: true };
+  const sections = [
+    [null, job.description],
+    ['Responsibilities', job.responsibilitiesTextArea],
+    ['Requirements', job.requirementsMustTextArea],
+    ['Nice to have', job.requirementsNiceTextArea],
+    ['Technologies', (job.technologies || []).join(', ')],
+  ];
+  return sections
+    .filter(([, text]) => text && String(text).trim())
+    .map(([title, text]) => [title, String(text).replace(/[ \t]+\n/g, '\n').trim()].filter(Boolean).join('\n'))
+    .join('\n\n');
+}
+
 // jobs.ch, jobup.ch, SRG SSR, Nestlé : le JobPosting schema.org que ces
 // sites publient pour le référencement. SRG met tâches et profil dans des
 // champs à part, ajoutés s'ils ne sont pas déjà dans la description.
@@ -147,13 +172,16 @@ function extractDescription(source, body) {
       case 'nestle.com':
         text = fromJsonLd(String(body || ''));
         break;
+      case 'swissdevjobs.ch':
+        text = fromSwissDevJobs(String(body || ''));
+        break;
       default:
         return { error: 'source sans page de détail' };
     }
   } catch (e) {
     return { error: `réponse illisible : ${e.message}`.slice(0, 200) };
   }
-  if (text && text.expired) return { error: 'offre retirée (redirigée vers une liste)' };
+  if (text && text.expired) return { error: source === 'swissdevjobs.ch' ? 'offre retirée' : 'offre retirée (redirigée vers une liste)' };
   const result = finish(text);
   return result ? { text: result } : { error: text ? 'description trop courte' : 'description introuvable dans la page' };
 }

@@ -62,6 +62,27 @@ test('JSON-LD: JobPosting among other blocks, separate fields appended once', ()
   assert.equal(text.match(/Votre mission/g).length, 1);
 });
 
+test('swissdevjobs: job embedded in window.__detailedJob, sections in order', () => {
+  const job = {
+    isDisabledOrOutdated: false,
+    description: long('A career at Lombard Odier'),
+    responsibilitiesTextArea: '- Working on data projects  \n- Supporting users',
+    requirementsMustTextArea: '- SQL  \n- Python',
+    requirementsNiceTextArea: '',
+    technologies: ['SQL', 'Python'],
+  };
+  const html = `<script>window.__detailedJob = ${JSON.stringify(job)}</script>`;
+  const { text } = extractDescription('swissdevjobs.ch', html);
+  assert.match(text, /^A career at Lombard Odier/);
+  assert.match(text, /Responsibilities\n- Working on data projects\n- Supporting users/);
+  assert.match(text, /Requirements\n- SQL\n- Python\n\nTechnologies\nSQL, Python$/);
+  assert.doesNotMatch(text, /Nice to have/);
+  const gone = `<script>window.__detailedJob = ${JSON.stringify({ ...job, isDisabledOrOutdated: true })}</script>`;
+  assert.deepEqual(extractDescription('swissdevjobs.ch', gone), { error: 'offre retirée' });
+  const placeholder = '<script>window.__detailedJob = "JOB_PLACEHOLDER"</script>';
+  assert.deepEqual(extractDescription('swissdevjobs.ch', placeholder), { error: 'offre retirée' });
+});
+
 test('errors are explicit: page changed, teaser only, broken JSON, unsupported source', () => {
   assert.deepEqual(extractDescription('jobs.ch', '<html>rien</html>'), { error: 'description introuvable dans la page' });
   assert.deepEqual(

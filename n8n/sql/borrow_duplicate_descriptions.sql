@@ -39,7 +39,7 @@ WITH candidates AS (
   WHERE coalesce(a.raw_extra->>'description_full', '') = ''
     -- Une annonce dont la propre page reste à lire attend son tour : sa
     -- description vaut mieux que celle d'un doublon.
-    AND (a.source NOT IN ('linkedin.com', 'job-room.ch', 'cern.ch', 'jobs.ch', 'jobup.ch', 'srgssr.ch', 'nestle.com')
+    AND (a.source NOT IN ('linkedin.com', 'job-room.ch', 'cern.ch', 'jobs.ch', 'jobup.ch', 'srgssr.ch', 'nestle.com', 'swissdevjobs.ch')
          OR coalesce((a.raw_extra->>'description_fetch_attempts')::int, 0) >= 3)
   ORDER BY a.id, similarity(a.d_title, b.d_title) DESC, length(b.raw_extra->>'description_full') DESC
 )

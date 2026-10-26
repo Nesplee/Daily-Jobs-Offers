@@ -11,13 +11,14 @@
 ## Enrich Descriptions (`enrich_descriptions.json`)
 
 Les recherches de toutes les sources ne renvoient qu'un extrait de description (ou rien pour
-LinkedIn et CERN). Ce workflow, lancé à 8h30 les jours ouvrés après la collecte, lit la page de
+LinkedIn, CERN et swissdevjobs). Ce workflow, lancé à 8h30 les jours ouvrés après la collecte, lit la page de
 détail de chaque annonce et range le texte complet, dans sa langue d'origine (pas de DeepL),
 dans `raw_extra.description_full`. C'est la clé que `second_brain` lit en priorité.
 
 - Extraction par source dans [`n8n/logic/extract_description.js`](../logic/extract_description.js) :
   point d'accès invité LinkedIn, API de détail Job-Room, API SmartRecruiters (CERN), JSON-LD
-  `JobPosting` (jobs.ch, jobup.ch, SRG SSR, Nestlé). Une requête toutes les 5 s (LinkedIn répond 429 en dessous).
+  `JobPosting` (jobs.ch, jobup.ch, SRG SSR, Nestlé), objet `window.__detailedJob` embarqué dans la
+  page (swissdevjobs). Une requête toutes les 5 s (LinkedIn répond 429 en dessous).
 - Jooble et Adzuna répondent 403 hors navigateur : leurs annonces reprennent la description d'un
   doublon d'une autre source (mêmes règles que le digest), voir
   [`n8n/sql/borrow_duplicate_descriptions.sql`](../sql/borrow_duplicate_descriptions.sql). Indeed
