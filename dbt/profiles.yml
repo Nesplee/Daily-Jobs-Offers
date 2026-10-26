@@ -1,0 +1,18 @@
+# Aucun secret ici : variables fixées par ../scripts/dbt.sh depuis .env.
+# - dev  : bac à sable (schéma dbt_dev), cible par défaut
+# - prod : schéma analytics, lu par Metabase
+annonces:
+  target: dev
+  outputs:
+    dev: &base
+      type: postgres
+      host: "{{ env_var('DBT_HOST') }}"
+      port: "{{ env_var('DBT_PORT') | as_number }}"
+      user: dbt_runner
+      password: "{{ env_var('DBT_RUNNER_PASSWORD') }}"
+      dbname: "{{ env_var('DBT_DBNAME') }}"
+      schema: dbt_dev
+      threads: 4
+    prod:
+      <<: *base
+      schema: analytics

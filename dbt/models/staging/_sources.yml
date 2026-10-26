@@ -1,0 +1,15 @@
+version: 2
+
+sources:
+  - name: annonces
+    schema: public
+    description: Tables alimentées par le workflow n8n daily_jobs_offers (8h, lundi-vendredi).
+    tables:
+      - name: job_listings
+        # Le workflow ne tourne pas le week-end : 4 jours sans nouvelle offre
+        # couvrent un vendredi -> lundi sans fausse alerte.
+        loaded_at_field: created_at
+        freshness:
+          warn_after: {count: 96, period: hour}
+          error_after: {count: 144, period: hour}
+      - name: search_profiles

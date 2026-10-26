@@ -1,0 +1,29 @@
+skill,category,pattern
+dbt,data,\mdbt\M
+Airflow,data,\mairflow\M
+Spark,data,\m(py)?spark\M
+Kafka,data,\mkafka\M
+ETL / ELT,data,\m(etl|elt)\M
+Snowflake,data,\msnowflake\M
+Databricks,data,\mdatabricks\M
+BigQuery,data,\mbigquery\M
+Power BI,bi,\mpower ?bi\M
+Tableau,bi,\mtableau\M
+Excel,bi,\mexcel\M
+Python,langage,\mpython\M
+SQL,langage,\m(sql|postgres(ql)?|mysql)\M
+Java,langage,\mjava\M
+JavaScript / TypeScript,langage,\m(javascript|typescript|node\.?js)\M
+C#,langage,(\mc#|\.net\M)
+Docker,devops,\mdocker\M
+Kubernetes,devops,\m(kubernetes|k8s|openshift)\M
+Terraform,devops,\mterraform\M
+Ansible,devops,\mansible\M
+CI/CD,devops,(\mci ?/ ?cd\M|\mgitlab ci\M|\mgithub actions\M|\mjenkins\M)
+Git,devops,\mgit\M
+Linux,devops,\mlinux\M
+AWS,cloud,(\maws\M|amazon web services)
+Azure,cloud,\mazure\M
+GCP,cloud,(\mgcp\M|google cloud)
+Machine learning,ia,(machine learning|apprentissage automatique|\mml\M)
+LLM / IA générative,ia,(\mllm|genai|ia générative|generative ai)

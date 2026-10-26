@@ -1,0 +1,15 @@
+snapshots:
+  - name: job_listings_snapshot
+    description: >
+      Historique de public.job_listings. Une nouvelle version n'est créée que
+      si une colonne suivie change (pas last_checked_at, mis à jour à chaque
+      passage). raw_extra est suivi pour capter la description complète
+      ajoutée après coup par le workflow enrich_descriptions. Une offre supprimée par le nettoyage n8n (20 jours sans être
+      revue) est conservée, avec dbt_valid_to renseigné et dbt_is_deleted.
+    relation: source('annonces', 'job_listings')
+    config:
+      schema: snapshots
+      unique_key: id
+      strategy: check
+      check_cols: [title, company, location, url, match_score, match_category, is_read, is_favorite, raw_extra]
+      hard_deletes: new_record

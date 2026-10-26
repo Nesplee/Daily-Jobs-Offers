@@ -1,0 +1,19 @@
+version: 2
+
+models:
+  - name: stg_job_listings
+    description: Dernier état connu de chaque annonce collectée, supprimée ou non.
+    columns:
+      - name: listing_id
+        data_tests: [unique, not_null]
+      - name: source
+        data_tests: [not_null]
+      - name: offer_key
+        description: Identité métier (employeur normalisé + intitulé normalisé).
+        data_tests: [not_null]
+      - name: canton
+        description: NULL si la localisation est vide ou hors des cantons connus.
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [GE, VD, VS, FR, NE, JU, BE]

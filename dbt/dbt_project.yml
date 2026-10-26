@@ -1,0 +1,24 @@
+# Couche analytique d'annonces : historique des offres (snapshot) et analyse
+# du marché de l'emploi, construits par-dessus job_listings sans jamais y
+# écrire. Lancer via ../scripts/dbt.sh (voir README.md).
+name: annonces
+version: "1.0.0"
+config-version: 2
+profile: annonces
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+snapshot-paths: ["snapshots"]
+macro-paths: ["macros"]
+test-paths: ["tests"]
+target-path: "target"
+clean-targets: ["target", "dbt_packages"]
+
+models:
+  annonces:
+    staging:
+      +materialized: view
+    intermediate:
+      +materialized: view
+    marts:
+      +materialized: table

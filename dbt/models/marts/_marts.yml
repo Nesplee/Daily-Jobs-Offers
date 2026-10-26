@@ -1,0 +1,35 @@
+version: 2
+
+models:
+  - name: skill_demand
+    description: >
+      Pour chaque compétence du seed skills, nombre et part des offres qui la
+      citent (tout l'historique et 30 derniers jours). Parts minimales : de
+      nombreuses sources n'exposent qu'un extrait de description.
+    columns:
+      - name: skill
+        data_tests: [unique, not_null]
+  - name: skill_demand_weekly
+    description: Part hebdomadaire des nouvelles offres citant chaque compétence.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [week, skill]
+  - name: listings_by_source_weekly
+    description: Annonces, offres et offres exclusives apportées par chaque source, par semaine.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [week, source]
+  - name: top_hiring_companies
+    description: Employeurs par nombre d'offres (identité normalisée par dedup_company).
+    columns:
+      - name: company_key
+        data_tests: [unique, not_null]
+  - name: description_coverage
+    description: >
+      Couverture des descriptions complètes par source (annonces encore
+      présentes), avec leur provenance et le nombre d'échecs de récupération.
+    columns:
+      - name: source
+        data_tests: [unique, not_null]

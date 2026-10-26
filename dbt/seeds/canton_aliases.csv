@@ -1,0 +1,8 @@
+priority,canton,pattern
+1,GE,(\mge\M|gen[eè]v|\mgenf\M|meyrin|carouge|vernier|plan-les-ouates)
+2,VD,(\mvd\M|\mvaud\M|\mwaadt\M|lausanne|nyon|morges|vevey|montreux|yverdon|renens|\morbe\M|\mgland\M)
+3,VS,(\mvs\M|valais|wallis|\msion\M|sierre|martigny|monthey|\mfully\M|grimentz|savi[eè]se|\msitten\M)
+4,FR,(\mfr\M|fribourg|freiburg|\mbulle\M|gl[aâ]ne|\msaane\M|sarine)
+5,NE,(\mne\M|neuch[aâ]tel|neuenburg|la chaux)
+6,JU,(\mju\M|\mjura\M|del[eé]mont|porrentruy)
+7,BE,(\mbe\M|\mbern\M|\mberne\M|bienne|\mbiel\M)

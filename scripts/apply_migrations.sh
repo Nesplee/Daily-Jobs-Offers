@@ -21,9 +21,14 @@ done
 
 # Synchronise les mots de passe des rôles applicatifs avec .env (créés sans
 # mot de passe dans les migrations SQL, jamais commitées avec un secret).
-if $ADMIN_PSQL -tAc "SELECT 1 FROM pg_roles WHERE rolname='n8n_app';" | grep -q 1; then
+# Une variable absente de .env laisse le rôle tel quel au lieu de faire
+# échouer le script (set -u) après l'application des migrations.
+if [ -n "${N8N_APP_PASSWORD:-}" ] && $ADMIN_PSQL -tAc "SELECT 1 FROM pg_roles WHERE rolname='n8n_app';" | grep -q 1; then
   $ADMIN_PSQL -c "ALTER ROLE n8n_app WITH PASSWORD '${N8N_APP_PASSWORD}';"
 fi
-if $ADMIN_PSQL -tAc "SELECT 1 FROM pg_roles WHERE rolname='metabase_app';" | grep -q 1; then
+if [ -n "${METABASE_APP_PASSWORD:-}" ] && $ADMIN_PSQL -tAc "SELECT 1 FROM pg_roles WHERE rolname='metabase_app';" | grep -q 1; then
   $ADMIN_PSQL -c "ALTER ROLE metabase_app WITH PASSWORD '${METABASE_APP_PASSWORD}';"
+fi
+if [ -n "${DBT_RUNNER_PASSWORD:-}" ] && $ADMIN_PSQL -tAc "SELECT 1 FROM pg_roles WHERE rolname='dbt_runner';" | grep -q 1; then
+  $ADMIN_PSQL -c "ALTER ROLE dbt_runner WITH PASSWORD '${DBT_RUNNER_PASSWORD}';"
 fi

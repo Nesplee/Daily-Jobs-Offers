@@ -1,0 +1,21 @@
+version: 2
+
+seeds:
+  - name: skills
+    description: >
+      Compétences recherchées dans les offres. pattern est une regex Postgres
+      appliquée sans tenir compte de la casse (~*) ; \m et \M marquent le début
+      et la fin d'un mot.
+    columns:
+      - name: skill
+        data_tests: [unique, not_null]
+      - name: pattern
+        data_tests: [not_null]
+  - name: canton_aliases
+    description: >
+      Rattache une localisation libre ("Genf GE", "Geneva, Switzerland",
+      "Fully VS") à un canton. Le premier motif qui correspond, par priority
+      croissante, l'emporte.
+    columns:
+      - name: canton
+        data_tests: [unique, not_null]
