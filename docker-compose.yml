@@ -8,10 +8,10 @@ services:
     # 127.0.0.1 only: n8n reaches this service over the internal Docker
     # network (hostname "db", port 5432) via network_mode: host below — the
     # host port is published solely for SSH-tunneled debugging (psql/DBeaver
-    # from your laptop), never for direct internet exposure. Metabase (a
-    # separate docker-compose project) reaches this service over the
-    # "annonces-metabase-shared" external network instead, by container
-    # name, not through this published port.
+    # from your laptop), never for direct internet exposure. The second_brain
+    # worker (a separate docker-compose project, read-only role brain_reader)
+    # reaches this service over the "annonces-metabase-shared" external
+    # network instead, by container name, not through this published port.
     ports:
       - "127.0.0.1:${POSTGRES_PORT}:5432"
     volumes:
@@ -77,5 +77,8 @@ volumes:
   n8n_data:
 
 networks:
+  # Shared with the second_brain worker (see the db service above). The name
+  # is historical: it was created for Metabase, since removed; renaming it
+  # would mean recreating the network and both projects' containers.
   annonces-metabase-shared:
     external: true

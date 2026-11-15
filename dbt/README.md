@@ -2,8 +2,8 @@
 
 Couche analytique construite par-dessus `public.job_listings`, sans jamais y écrire. Rôle
 Postgres `dbt_runner` (migration 007) : lecture sur `public`, écriture dans `dbt_dev` (cible
-`dev`, par défaut), `analytics` (cible `prod`) et `snapshots`. Metabase (`metabase_app`)
-lit `analytics` et `snapshots`.
+`dev`, par défaut), `analytics` (cible `prod`) et `snapshots`. Aucun outil de visualisation
+n'est branché sur `analytics` et `snapshots` (Metabase a été retiré) : on les interroge en SQL.
 
 ```text
 job_listings ──snapshot──> snapshots.job_listings_snapshot   (historique, survit au nettoyage n8n)

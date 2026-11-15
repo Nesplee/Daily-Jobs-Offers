@@ -1,6 +1,6 @@
 # Aucun secret ici : variables fixées par ../scripts/dbt.sh depuis .env.
 # - dev  : bac à sable (schéma dbt_dev), cible par défaut
-# - prod : schéma analytics, lu par Metabase
+# - prod : schéma analytics (interrogé en SQL, aucun outil de visualisation branché)
 annonces:
   target: dev
   outputs:
