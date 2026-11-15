@@ -17,7 +17,7 @@ else
 fi
 
 # n8n_app must NOT be able to insert into search_profiles (read-only on profiles).
-if run_as n8n_app "${N8N_APP_PASSWORD}" "INSERT INTO search_profiles (name, keywords, locations) VALUES ('x', ARRAY['x'], ARRAY['x']);" | grep -q "permission denied"; then
+if run_as n8n_app "${N8N_APP_PASSWORD:-}" "INSERT INTO search_profiles (name, keywords, locations) VALUES ('x', ARRAY['x'], ARRAY['x']);" | grep -q "permission denied"; then
   echo "PASS: n8n_app cannot INSERT into search_profiles"
 else
   echo "FAIL: n8n_app was able to INSERT into search_profiles"
@@ -25,7 +25,7 @@ else
 fi
 
 # n8n_app MUST be able to delete from job_listings (needed by the TTL cleanup step).
-if run_as n8n_app "${N8N_APP_PASSWORD}" "DELETE FROM job_listings WHERE source='no-such-row';" | grep -qi "DELETE 0"; then
+if run_as n8n_app "${N8N_APP_PASSWORD:-}" "DELETE FROM job_listings WHERE source='no-such-row';" | grep -qi "DELETE 0"; then
   echo "PASS: n8n_app can DELETE from job_listings"
 else
   echo "FAIL: n8n_app could not DELETE from job_listings"
