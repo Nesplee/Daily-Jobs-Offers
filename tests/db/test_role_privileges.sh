@@ -8,19 +8,19 @@ run_as() {
     psql -U "$user" -d "${POSTGRES_DB}" -c "$sql" 2>&1 || true
 }
 
-# metabase_app must NOT be able to delete from job_listings.
-if run_as metabase_app "${METABASE_APP_PASSWORD}" "DELETE FROM job_listings WHERE source='no-such-row';" | grep -q "permission denied"; then
-  echo "PASS: metabase_app cannot DELETE from job_listings"
+# metabase_app was dropped by migration 008 and must not come back.
+if run_as "${POSTGRES_ADMIN_USER}" "${POSTGRES_ADMIN_PASSWORD}" "SELECT 'role_count=' || count(*) FROM pg_roles WHERE rolname='metabase_app';" | grep -q "role_count=0"; then
+  echo "PASS: metabase_app role no longer exists"
 else
-  echo "FAIL: metabase_app was able to DELETE from job_listings"
+  echo "FAIL: metabase_app role still exists"
   exit 1
 fi
 
-# metabase_app must NOT be able to insert into search_profiles.
-if run_as metabase_app "${METABASE_APP_PASSWORD}" "INSERT INTO search_profiles (name, keywords, locations) VALUES ('x', ARRAY['x'], ARRAY['x']);" | grep -q "permission denied"; then
-  echo "PASS: metabase_app cannot INSERT into search_profiles"
+# n8n_app must NOT be able to insert into search_profiles (read-only on profiles).
+if run_as n8n_app "${N8N_APP_PASSWORD}" "INSERT INTO search_profiles (name, keywords, locations) VALUES ('x', ARRAY['x'], ARRAY['x']);" | grep -q "permission denied"; then
+  echo "PASS: n8n_app cannot INSERT into search_profiles"
 else
-  echo "FAIL: metabase_app was able to INSERT into search_profiles"
+  echo "FAIL: n8n_app was able to INSERT into search_profiles"
   exit 1
 fi
 
