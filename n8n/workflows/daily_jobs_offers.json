@@ -764,7 +764,7 @@
     },
     {
       "parameters": {
-        "jsCode": "function normalizeIndeedItem(raw) {\n    return {\n      source: 'indeed.ch',\n      source_id: raw.id,\n      title: raw.positionName,\n      company: raw.company || null,\n      url: raw.url,\n      location: raw.location || null,\n      posted_at: (raw.postingDateParsed || raw.scrapedAt || '').slice(0, 10) || null,\n      raw_extra: {\n        description_snippet: raw.description || null,\n        job_type: Array.isArray(raw.jobType) ? raw.jobType.join(', ') : (raw.jobType || null),\n        salary: raw.salary || null,\n      },\n    };\n  }\n\n  // Même remarque que pour Job-Room : n8n éclate un corps de réponse HTTP\n  // qui est un tableau JSON en un item par élément. Aucun résultat pour ce\n  // mot-clé = simplement zéro item, pas une erreur.\n  if (items.length === 0) return [];\n\n  // Deux cas distincts renvoient un item { error, ... } au lieu d'une offre,\n  // ni l'un ni l'autre n'étant une réponse malformée :\n  // - Apify renvoie {error: \"FOUND_NO_RESULTS\", errorDescription: \"...\"}\n  //   quand le scraper ne trouve aucune offre pour ce mot-clé (error est une\n  //   string) — vu en prod le 20/08 suite à un blocage anti-bot d'Indeed sur\n  //   les pages de détail, où la recherche trouvait des offres mais aucune\n  //   n'était extractible.\n  // - Le node \"Indeed Search\" a onError: continueRegularOutput, donc un\n  //   timeout HTTP (l'acteur Apify peut prendre jusqu'à plusieurs minutes)\n  //   devient un item normal {error: {message, name, stack}, code:\n  //   \"ECONNABORTED\", status: null} au lieu de faire échouer le node (error\n  //   est un objet).\n  // Dans les deux cas on traite l'item comme une absence de résultat plutôt\n  // que de faire planter tout le workflow du jour pour une seule branche.\n  const withoutErrors = items.filter(item => !item.json || !item.json.error);\n\n  const malformed = withoutErrors.find(item => !item.json || !item.json.positionName);\n  if (malformed) {\n    // Échec explicite plutôt qu'avalé silencieusement — voir le commentaire\n    // équivalent dans \"Normalize Adzuna\".\n    return [{ json: { __sourceError: true, source: 'Indeed', message: 'réponse inattendue — ' + JSON.stringify(malformed.json).slice(0, 500) } }];\n  }\n\n  return withoutErrors.map(item => ({ json: normalizeIndeedItem(item.json) }));\n"
+        "jsCode": "// --- Copie de n8n/logic/normalize_indeed.js (testé dans tests/logic/normalize_indeed.test.js) ---\nfunction normalizeIndeedItem(raw) {\n  return {\n    source: 'indeed.ch',\n    source_id: raw.id,\n    title: raw.positionName,\n    company: raw.company || null,\n    url: raw.url,\n    location: raw.location || null,\n    posted_at: (raw.postingDateParsed || raw.scrapedAt || '').slice(0, 10) || null,\n    raw_extra: {\n      description_snippet: raw.description || null,\n      job_type: Array.isArray(raw.jobType) ? raw.jobType.join(', ') : (raw.jobType || null),\n      salary: raw.salary || null,\n    },\n  };\n}\n\n// Trie les items de \"Indeed Search\" (onError: continueRegularOutput) :\n// - { error: \"FOUND_NO_RESULTS\", ... } (error est une string) : Apify n'a\n//   trouvé aucune offre pour ce mot-clé, ce n'est pas une panne ;\n// - { error: { message, name, stack }, ... } (error est un objet) : la requête\n//   a échoué (jeton Apify refusé en 401, timeout, 5xx...). Avant, ces items\n//   étaient écartés comme une absence de résultat : Indeed est resté à 0 offre\n//   avec une exécution « success » et sans alerte (401 du 13.11.2026).\nfunction splitIndeedResponses(items) {\n  const isFailure = item => !!item.json && !!item.json.error && typeof item.json.error === 'object';\n  const failures = items.filter(isFailure);\n  const rest = items.filter(item => !isFailure(item) && (!item.json || !item.json.error));\n  return { failures, rest };\n}\n\n// Aucun résultat pour ce mot-clé = simplement zéro item, pas une erreur.\nif (items.length === 0) return [];\n\nconst { failures, rest } = splitIndeedResponses(items);\n\nconst malformed = rest.find(item => !item.json || !item.json.positionName);\nif (malformed) {\n  // Échec explicite plutôt qu'avalé silencieusement — voir \"Normalize Adzuna\".\n  return [{ json: { __sourceError: true, source: 'Indeed', message: 'réponse inattendue — ' + JSON.stringify(malformed.json).slice(0, 500) } }];\n}\n\nconst jobs = rest.map(item => ({ json: normalizeIndeedItem(item.json) }));\nif (failures.length > 0) {\n  // Requêtes Apify échouées (jeton refusé en 401, timeout, 5xx) : UN marqueur\n  // avec le décompte, résumé par \"Format Source Error\" dans l'e-mail d'alerte.\n  // total = nombre de requêtes envoyées (un item de \"Search terms\" chacune).\n  jobs.push({ json: { __sourceError: true, source: 'Indeed', failed: failures.length,\n    total: $('Search terms').all().length, message: String(failures[0].json.error.message || failures[0].json.error) } });\n}\nreturn jobs;\n"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -1165,6 +1165,44 @@
       ],
       "id": "d1751972-d143-419c-9036-dbe3573a64a1",
       "name": "Normalize Nestlé"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// --- Copie de n8n/logic/source_stats.js (testé dans tests/logic/source_stats.test.js) ---\n// Compte, par source, les offres brutes (sortie de \"Merge\"), les offres\n// retenues (\"Filter by profile\") et les requêtes en échec (marqueurs\n// __sourceError). Toute source connue absente de \"Merge\" est enregistrée à 0 :\n// c'est ce zéro qui permet de repérer une source muette.\nconst KNOWN_SOURCES = [\n  'jobs.ch', 'jobup.ch', 'job-room.ch', 'jooble.ch', 'adzuna.ch', 'linkedin.com',\n  'indeed.ch', 'cern.ch', 'swissdevjobs.ch', 'srgssr.ch', 'nestle.com',\n];\n\n// Nom utilisé par les marqueurs d'erreur -> valeur de job_listings.source.\nconst MARKER_SOURCES = {\n  'Adzuna': 'adzuna.ch', 'CERN': 'cern.ch', 'Indeed': 'indeed.ch', 'Job-Room': 'job-room.ch',\n  'Jooble': 'jooble.ch', 'LinkedIn': 'linkedin.com', 'Nestlé': 'nestle.com',\n  'SRG SSR': 'srgssr.ch', 'swissdevjobs': 'swissdevjobs.ch',\n};\n\nfunction computeSourceStats(merged, kept, runDate) {\n  const rows = new Map(KNOWN_SOURCES.map(s => [s, { source: s, raw_count: 0, kept_count: 0, error_count: 0 }]));\n  const row = source => {\n    if (!rows.has(source)) rows.set(source, { source, raw_count: 0, kept_count: 0, error_count: 0 });\n    return rows.get(source);\n  };\n  for (const item of merged) {\n    const j = item.json || {};\n    if (j.__sourceError) {\n      row(MARKER_SOURCES[j.source] || j.source).error_count += j.failed || 1;\n    } else if (j.source) {\n      row(j.source).raw_count += 1;\n    }\n  }\n  for (const item of kept) {\n    const j = item.json || {};\n    if (j.source) row(j.source).kept_count += 1;\n  }\n  return [...rows.values()].map(r => ({ run_date: runDate, ...r }));\n}\n\nconst merged = $('Merge').all();\nlet kept = [];\ntry { kept = $('Filter by profile').all(); } catch (e) { /* aucune offre retenue */ }\nconst runDate = new Date().toISOString().slice(0, 10);\nreturn [{ json: { rows: computeSourceStats(merged, kept, runDate) } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1440,
+        -120
+      ],
+      "id": "d5377cfd-b1ea-4905-b3d4-8bc7b5a42dfb",
+      "name": "Source stats"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Une ligne par source et par jour : brut / retenu / requêtes en échec\n  -- (voir migrations/009_create_source_run_stats.sql). Relancer le workflow le\n  -- même jour écrase la ligne du jour.\n  INSERT INTO source_run_stats (run_date, source, raw_count, kept_count, error_count)\n  SELECT r.run_date, r.source, r.raw_count, r.kept_count, r.error_count\n  FROM jsonb_to_recordset($1::jsonb) AS r(run_date date, source text, raw_count int, kept_count int, error_count int)\n  ON CONFLICT (run_date, source) DO UPDATE SET\n    raw_count = EXCLUDED.raw_count,\n    kept_count = EXCLUDED.kept_count,\n    error_count = EXCLUDED.error_count,\n    recorded_at = now();\n",
+        "options": {
+          "queryReplacement": "={{ [ JSON.stringify($json.rows) ] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1660,
+        -120
+      ],
+      "id": "851b5bd0-bded-4ec3-8932-7bd5f65fd00b",
+      "name": "Save source stats",
+      "credentials": {
+        "postgres": {
+          "id": "zIIUfintNuifHQcc",
+          "name": "annonces db"
+        }
+      }
     }
   ],
   "pinData": {},
@@ -1795,6 +1833,28 @@
             "node": "Merge",
             "type": "main",
             "index": 10
+          }
+        ]
+      ]
+    },
+    "Nettoyage": {
+      "main": [
+        [
+          {
+            "node": "Source stats",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Source stats": {
+      "main": [
+        [
+          {
+            "node": "Save source stats",
+            "type": "main",
+            "index": 0
           }
         ]
       ]

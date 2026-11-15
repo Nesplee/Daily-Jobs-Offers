@@ -18,6 +18,8 @@ assert_table_exists public search_profiles
 
 assert_table_exists public job_listings
 
+assert_table_exists public source_run_stats
+
 assert_column_exists() {
   local table=$1 column=$2
   local exists
