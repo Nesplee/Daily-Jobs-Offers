@@ -28,3 +28,7 @@ dans `raw_extra.description_full`. C'est la clé que `second_brain` lit en prior
   description sur au moins 3 essais dans un même passage.
 - L'upsert du workflow quotidien n'efface plus `description_full` quand la recherche renvoie null.
 
+
+## Statistiques par source (`source_run_stats`)
+
+À la fin de la collecte quotidienne, `Source stats` / `Save source stats` écrivent une ligne par source et par jour (offres brutes, retenues par `Filter by profile`, requêtes en échec) dans `source_run_stats` (migration 009). Une source connue absente de `Merge` est enregistrée à 0. Le récap du samedi en tire le tableau « Sources sur 7 jours ». Une source muette se repère par `SELECT source FROM source_run_stats WHERE run_date >= current_date - 7 GROUP BY source HAVING sum(raw_count) = 0`. Les requêtes Apify d'Indeed qui échouent (401, timeout, 5xx) arrivent dans l'e-mail d'alerte comme les autres sources.
