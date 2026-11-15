@@ -70,6 +70,9 @@ services:
       - ./tailscale-certs:/home/node/tailscale-certs:ro
     depends_on:
       - db
+    # mem_limit (2026-11-15): peak 416 MiB (cgroup memory.peak since 11-14 14:36), 176 MiB at rest.
+    # 768m = ~1.8x the peak; swap (4 GB) stays the safety net. After the 11-13 global OOM.
+    mem_limit: 768m
     restart: unless-stopped
 
 volumes:
