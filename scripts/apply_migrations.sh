@@ -26,6 +26,3 @@ done
 if [ -n "${N8N_APP_PASSWORD:-}" ] && $ADMIN_PSQL -tAc "SELECT 1 FROM pg_roles WHERE rolname='n8n_app';" | grep -q 1; then
   $ADMIN_PSQL -c "ALTER ROLE n8n_app WITH PASSWORD '${N8N_APP_PASSWORD}';"
 fi
-if [ -n "${DBT_RUNNER_PASSWORD:-}" ] && $ADMIN_PSQL -tAc "SELECT 1 FROM pg_roles WHERE rolname='dbt_runner';" | grep -q 1; then
-  $ADMIN_PSQL -c "ALTER ROLE dbt_runner WITH PASSWORD '${DBT_RUNNER_PASSWORD}';"
-fi

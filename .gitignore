@@ -6,3 +6,6 @@ n8n/workflows/backups/
 # dbt
 .venv-dbt/
 logs/
+
+# Archives locales (couvertes par restic, pas par git)
+archive/
